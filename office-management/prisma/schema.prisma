@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model HR {
+  id                 String         @id @default(cuid())
+  name               String
+  email              String         @unique
+  password           String
+  organization       String
+  organizationDomain String
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  phone              String?
+  departments        Department[]
+  holidays           Holiday[]
+  leaveRequests      LeaveRequest[]
+  sentMessages       Message[]      @relation("HRSender")
+  tasks              Task[]
+  salaryAudits       SalaryAudit[]  @relation("HRSalaryAudits")
+}
+
+model Department {
+    employees   Employee[]   @relation("DepartmentStaff")
+    tasks       Task[]       @relation("DepartmentTasks")
+    messages    Message[]    @relation("SiloMessages")
+  id           String      @id @default(cuid())
+  name         String
+  hrId         String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  budget       String?
+  capacity     Int?
+  efficiency   Int?
+  managerId    String?
+  hr           HR          @relation(fields: [hrId], references: [id])
+  manager      Employee?   @relation("ManagerIntern", fields: [managerId], references: [id])
+  // employees    Employee[]  @relation("EmployeeDepartment")
+}
+
+model Employee {
+  manages     Department[] @relation("ManagerIntern")
+  // departments Department[] @relation("EmployeeDepartment")
+  id                String         @id @default(cuid())
+  name              String
+  email             String         @unique
+  password          String
+  role              RoleType       @default(INTERN)
+  departmentId      String?
+  managerId         String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  position          String?        @default("Workforce Member")
+  attendances       Attendance[]
+  department        Department?    @relation("DepartmentStaff", fields: [departmentId], references: [id])
+  manager           Employee?      @relation("ManagerIntern", fields: [managerId], references: [id])
+  subordinates      Employee[]     @relation("ManagerIntern")
+  leaveRequests     LeaveRequest[]
+  sentMessages      Message[]      @relation("EmployeeSender")
+  tasks             Task[]
+  salaryAudits      SalaryAudit[]  @relation("EmployeeSalaryAudits")
+}
+
+model Attendance {
+  id         String   @id @default(cuid())
+  employeeId String
+  timestamp  DateTime @default(now())
+  photo      String?
+  location   String?
+  type       String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+}
+
+model Task {
+  id           String      @id @default(cuid())
+  title        String
+  description  String?
+  hrId         String?
+  employeeId   String
+  createdAt    DateTime    @default(now())
+  departmentId String?
+  status       String      @default("TODO")
+  department   Department? @relation("DepartmentTasks", fields: [departmentId], references: [id])
+  employee     Employee    @relation(fields: [employeeId], references: [id])
+  hr           HR?         @relation(fields: [hrId], references: [id])
+}
+
+model Holiday {
+  id    String   @id @default(cuid())
+  date  DateTime
+  title String
+  hrId  String
+  hr    HR       @relation(fields: [hrId], references: [id])
+}
+
+model LeaveRequest {
+  id         String   @id @default(cuid())
+  title      String
+  startDate  DateTime
+  endDate    DateTime
+  employeeId String
+  hrId       String?
+  status     String   @default("PENDING")
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  hr         HR?      @relation(fields: [hrId], references: [id])
+  createdAt  DateTime @default(now()) // <-- Add this line
+
+}
+
+model Message {
+  id               String      @id @default(cuid())
+  content          String
+  createdAt        DateTime    @default(now())
+  departmentId     String?
+  employeeSenderId String?
+  hrSenderId       String?
+  department       Department? @relation("SiloMessages", fields: [departmentId], references: [id])
+  employeeSender   Employee?   @relation("EmployeeSender", fields: [employeeSenderId], references: [id])
+  hrSender         HR?         @relation("HRSender", fields: [hrSenderId], references: [id])
+}
+
+model Broadcast {
+  id         String    @id @default(uuid()) @db.Uuid
+  senderId   String    @db.VarChar(36)
+  senderRole String    @db.VarChar(20)
+  message    String
+  createdAt  DateTime? @default(now()) @db.Timestamp(6)
+  visibility String    @db.VarChar(20)
+}
+
+model User {
+  id          String    @id
+  name        String
+  email       String    @unique
+  role        String
+  original_id String?
+  createdat   DateTime? @default(now()) @db.Timestamp(6)
+}
+
+enum RoleType {
+  ADMIN
+  MANAGER
+  INTERN
+}
+
+
+model SalaryAudit {
+  id           String   @id @default(cuid())
+  employeeId   String
+  oldSalary    Float
+  newSalary    Float
+  changedById  String // HR or Admin who made the change
+  reason       String?
+  createdAt    DateTime @default(now())
+
+  employee     Employee @relation("EmployeeSalaryAudits", fields: [employeeId], references: [id])
+  changedBy    HR       @relation("HRSalaryAudits", fields: [changedById], references: [id])
+}
