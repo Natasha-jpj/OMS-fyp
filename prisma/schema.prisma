@@ -21,48 +21,46 @@ model HR {
   leaveRequests      LeaveRequest[]
   sentMessages       Message[]      @relation("HRSender")
   tasks              Task[]
-  salaryAudits       SalaryAudit[]  @relation("HRSalaryAudits")
 }
 
 model Department {
-    employees   Employee[]   @relation("DepartmentStaff")
-    tasks       Task[]       @relation("DepartmentTasks")
-    messages    Message[]    @relation("SiloMessages")
-  id           String      @id @default(cuid())
-  name         String
-  hrId         String
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  budget       String?
-  capacity     Int?
-  efficiency   Int?
-  managerId    String?
-  hr           HR          @relation(fields: [hrId], references: [id])
-  manager      Employee?   @relation("ManagerIntern", fields: [managerId], references: [id])
-  // employees    Employee[]  @relation("EmployeeDepartment")
+  id         String     @id @default(cuid())
+  name       String
+  hrId       String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  budget     String?
+  capacity   Int?
+  efficiency Int?
+  managerId  String?
+  hr         HR         @relation(fields: [hrId], references: [id])
+  manager    Employee?  @relation("ManagerIntern", fields: [managerId], references: [id])
+  employees  Employee[] @relation("DepartmentStaff")
+  messages   Message[]  @relation("SiloMessages")
+  projects   Project[]  @relation("DepartmentProjects")
+  tasks      Task[]     @relation("DepartmentTasks")
 }
 
 model Employee {
-  manages     Department[] @relation("ManagerIntern")
-  // departments Department[] @relation("EmployeeDepartment")
-  id                String         @id @default(cuid())
-  name              String
-  email             String         @unique
-  password          String
-  role              String         @default("Staff Member")
-  departmentId      String?
-  managerId         String?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  position          String?        @default("Workforce Member")
-  attendances       Attendance[]
-  department        Department?    @relation("DepartmentStaff", fields: [departmentId], references: [id])
-  manager           Employee?      @relation("ManagerIntern", fields: [managerId], references: [id])
-  subordinates      Employee[]     @relation("ManagerIntern")
-  leaveRequests     LeaveRequest[]
-  sentMessages      Message[]      @relation("EmployeeSender")
-  tasks             Task[]
-  salaryAudits      SalaryAudit[]  @relation("EmployeeSalaryAudits")
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  password      String
+  role          String         @default("INTERN")
+  departmentId  String?
+  managerId     String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  position      String?        @default("Workforce Member")
+  hrId          String?
+  attendances   Attendance[]
+  manages       Department[]   @relation("ManagerIntern")
+  department    Department?    @relation("DepartmentStaff", fields: [departmentId], references: [id])
+  manager       Employee?      @relation("ManagerIntern", fields: [managerId], references: [id])
+  subordinates  Employee[]     @relation("ManagerIntern")
+  leaveRequests LeaveRequest[]
+  sentMessages  Message[]      @relation("EmployeeSender")
+  tasks         Task[]
 }
 
 model Attendance {
@@ -89,6 +87,17 @@ model Task {
   hr           HR?         @relation(fields: [hrId], references: [id])
 }
 
+model Project {
+  id           String     @id @default(cuid())
+  name         String
+  description  String
+  status       String     @default("PLANNING")
+  departmentId String
+  createdAt    DateTime   @default(now()) @db.Timestamp(6)
+  updatedAt    DateTime   @default(now()) @updatedAt @db.Timestamp(6)
+  department   Department @relation("DepartmentProjects", fields: [departmentId], references: [id])
+}
+
 model Holiday {
   id    String   @id @default(cuid())
   date  DateTime
@@ -98,17 +107,17 @@ model Holiday {
 }
 
 model LeaveRequest {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   title      String
   startDate  DateTime
   endDate    DateTime
   employeeId String
   hrId       String?
-  status     String   @default("PENDING")
-  employee   Employee @relation(fields: [employeeId], references: [id])
-  hr         HR?      @relation(fields: [hrId], references: [id])
-  createdAt  DateTime @default(now()) // <-- Add this line
-
+  status     String    @default("PENDING")
+  createdAt  DateTime? @default(now()) @db.Timestamp(6)
+  reason     String?
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  hr         HR?       @relation(fields: [hrId], references: [id])
 }
 
 model Message {
@@ -118,18 +127,20 @@ model Message {
   departmentId     String?
   employeeSenderId String?
   hrSenderId       String?
+  receiverId       String?
   department       Department? @relation("SiloMessages", fields: [departmentId], references: [id])
   employeeSender   Employee?   @relation("EmployeeSender", fields: [employeeSenderId], references: [id])
   hrSender         HR?         @relation("HRSender", fields: [hrSenderId], references: [id])
 }
 
 model Broadcast {
-  id         String    @id @default(uuid()) @db.Uuid
+  id         String    @id(map: "broadcasts_pkey") @default(dbgenerated("nextval('broadcasts_id_seq'::regclass)")) @db.VarChar(36)
   senderId   String    @db.VarChar(36)
   senderRole String    @db.VarChar(20)
   message    String
   createdAt  DateTime? @default(now()) @db.Timestamp(6)
   visibility String    @db.VarChar(20)
+  hrId       String?
 }
 
 model User {
@@ -145,18 +156,4 @@ enum RoleType {
   ADMIN
   MANAGER
   INTERN
-}
-
-
-model SalaryAudit {
-  id           String   @id @default(cuid())
-  employeeId   String
-  oldSalary    Float
-  newSalary    Float
-  changedById  String // HR or Admin who made the change
-  reason       String?
-  createdAt    DateTime @default(now())
-
-  employee     Employee @relation("EmployeeSalaryAudits", fields: [employeeId], references: [id])
-  changedBy    HR       @relation("HRSalaryAudits", fields: [changedById], references: [id])
 }

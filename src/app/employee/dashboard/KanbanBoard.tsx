@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+import React, { useState, useEffect } from "react";
 import {
   DndContext,
   closestCenter,
@@ -11,7 +12,6 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { TaskKanban } from "../../manager/dashboard/TaskKanban";
 
 const columns = [
   { id: "TODO", label: "TO DO" },
@@ -20,9 +20,15 @@ const columns = [
   { id: "DONE", label: "DONE" },
 ];
 
-export default function KanbanBoard({ initialTasks, onTaskStatusChange }: any) {
+export default function KanbanBoard({ initialTasks, employees, isManagerView = false, onTaskStatusChange }: any) {
   const [tasks, setTasks] = useState(initialTasks);
   const [activeTask, setActiveTask] = useState<any>(null);
+
+  // Update tasks when initialTasks changes
+  useEffect(() => {
+    console.log("KanbanBoard received initialTasks:", initialTasks);
+    setTasks(initialTasks || []);
+  }, [initialTasks]);
 
   function getTasksByStatus(status: string) {
     return tasks.filter((t: any) => t.status === status);
@@ -38,6 +44,7 @@ export default function KanbanBoard({ initialTasks, onTaskStatusChange }: any) {
     const { active, over } = event;
     setActiveTask(null);
     if (!over || active.id === over.id) return;
+    
     const overCol = columns.find((col) => col.id === over.id);
     if (overCol) {
       // Dropped on a column: change status
@@ -46,11 +53,14 @@ export default function KanbanBoard({ initialTasks, onTaskStatusChange }: any) {
       );
       setTasks(updatedTasks);
       if (onTaskStatusChange) onTaskStatusChange(active.id, over.id);
-      await fetch("/api/employee/tasks", {
+      
+      // Update via API
+      const endpoint = isManagerView ? "/api/manager/tasks" : "/api/employee/tasks";
+      await fetch(endpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: active.id, status: over.id }),
-      });
+      }).catch(err => console.error("Failed to update task status:", err));
     }
   }
 
@@ -68,7 +78,7 @@ export default function KanbanBoard({ initialTasks, onTaskStatusChange }: any) {
               strategy={verticalListSortingStrategy}
             >
               {getTasksByStatus(col.id).map((task: any) => (
-                <DraggableTask key={task.id} task={task} />
+                <DraggableTask key={task.id} task={task} employees={employees} />
               ))}
             </SortableContext>
           </DroppableColumn>
@@ -91,7 +101,7 @@ function DroppableColumn({ id, label, children }: any) {
   return (
     <div
       ref={setNodeRef}
-      className={`flex flex-col min-h-[600px] bg-gray-100/30 p-5 rounded-[2.8rem] border border-gray-100/50 backdrop-blur-sm ${
+      className={`flex flex-col min-h-[600px] bg-gray-100/30 p-5 rounded-[2.8rem] border border-gray-100/50 backdrop-blur-sm transition-all ${
         isOver ? "ring-2 ring-yellow-400" : ""
       }`}
     >
@@ -104,17 +114,18 @@ function DroppableColumn({ id, label, children }: any) {
   );
 }
 
-function DraggableTask({ task }: any) {
+function DraggableTask({ task, employees }: any) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
   });
-  // Color by status
+
   const statusColor = {
     TODO: "bg-slate-400",
     IN_PROGRESS: "bg-yellow-400",
     IN_REVIEW: "bg-red-400",
     DONE: "bg-emerald-400",
   }[task.status] || "bg-slate-400";
+
   return (
     <div
       ref={setNodeRef}
@@ -130,20 +141,27 @@ function DraggableTask({ task }: any) {
     >
       <div className={`absolute top-0 left-0 h-full w-1 ${statusColor} opacity-20`} />
       <div className="flex justify-between items-start mb-3">
-        <h4 className="text-[13px] font-bold tracking-tight text-[#2D2D2D] leading-tight">{task.title}</h4>
-        <button className="text-gray-200 hover:text-black transition-colors"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#eee" /></svg></button>
+        <h4 className="text-[13px] font-bold tracking-tight text-[#2D2D2D] leading-tight flex-1">{task.title}</h4>
+        <button className="text-gray-200 hover:text-black transition-colors ml-2"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#eee" /></svg></button>
       </div>
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No Due"}</span>
-        <span className="text-[10px] font-bold text-blue-400">{task.code || "SCRUM-XX"}</span>
+      
+      {task.description && (
+        <p className="text-[11px] text-gray-400 font-medium mb-3 line-clamp-2">{task.description}</p>
+      )}
+
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded">{task.status}</span>
       </div>
-      <p className="text-[11px] text-gray-400 font-medium leading-relaxed mb-6 line-clamp-2">{task.description}</p>
+
       <div className="flex justify-between items-center pt-4 border-t border-gray-50">
         <div className="flex items-center gap-2 bg-gray-50 px-2 py-1 rounded-full border border-gray-100">
-          <div className="w-5 h-5 bg-[#2D2D2D] text-[#FFD541] rounded-full flex items-center justify-center text-[8px] font-black">{task.employee?.name?.charAt(0) || "U"}</div>
-          <span className="text-[9px] font-bold text-gray-500 uppercase">{task.employee?.name?.split(' ')[0] || "User"}</span>
+          <div className="w-5 h-5 bg-[#2D2D2D] text-[#FFD541] rounded-full flex items-center justify-center text-[8px] font-black">
+            {task.employee?.name?.charAt(0) || "U"}
+          </div>
+          <span className="text-[9px] font-bold text-gray-500 uppercase">
+            {task.employee?.name?.split(' ')[0] || "User"}
+          </span>
         </div>
-        <div className="flex items-center gap-1.5 text-gray-200"><svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#ccc" /></svg><span className="text-[9px] font-black">{task.estimate || "24H"}</span></div>
       </div>
     </div>
   );

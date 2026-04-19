@@ -1,26 +1,13 @@
 import { NextResponse } from "next/server";
-import prisma from "../../../../../prismaClient";
+import { prisma } from "@/lib/prisma";
 
-// GET: Manager fetches all attendance records for their department
 export async function GET(req: Request) {
   try {
-    // For demo, get departmentId from query (in real, from auth)
-    const { searchParams } = new URL(req.url);
-    const deptId = searchParams.get("deptId");
-    if (!deptId) return NextResponse.json({ error: "Missing departmentId" }, { status: 400 });
+    // Get all employees
+    const employees = await prisma.employee.findMany();
 
-    // Get all employees in department, excluding manager(s)
-    const employees = await prisma.employee.findMany({
-      where: {
-        departmentId: deptId,
-        NOT: { role: "MANAGER" }
-      }
-    });
-    const employeeIds = employees.map(e => e.id);
-
-    // Get all attendance records for these employees (not manager)
+    // Get all attendance records
     const attendance = await prisma.attendance.findMany({
-      where: { employeeId: { in: employeeIds } },
       orderBy: { timestamp: "desc" },
     });
 

@@ -16,10 +16,9 @@ export default function DashboardPage() {
     // 1. Wrap each fetch in its own handler to prevent one crash from killing everything
     const fetchSafe = async (url) => {
       try {
-        const r = await fetch(url);
+        const r = await fetch(url, { credentials: "include" });
         return r.ok ? await r.json() : null;
       } catch (e) {
-        console.error(`Failed to fetch ${url}:`, e);
         return null;
       }
     };
@@ -38,7 +37,7 @@ export default function DashboardPage() {
     if (hrRes) setHrUser(hrRes.hr || null);
 
   } catch (err) {
-    console.error("Critical Fetch Error:", err);
+    // Error handled silently
   } finally {
     setLoading(false);
   }

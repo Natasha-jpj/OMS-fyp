@@ -10,8 +10,13 @@ export async function managerHireEmployee(formData: FormData) {
   const password = formData.get("password") as string;
   const position = formData.get("position") as string;
   const role = formData.get("role") as "INTERN" | "MANAGER"; // Manager can choose role
-  const departmentId = formData.get("departmentId") as string;
+  let departmentId = formData.get("departmentId") as string;
   const managerId = formData.get("managerId") as string;
+
+  // Handle case where departmentId is undefined, null, or the string "undefined"
+  if (!departmentId || departmentId === "undefined" || departmentId === "null") {
+    departmentId = null as any;
+  }
 
   try {
     // 1. Verification: Ensure email is unique in the organization
@@ -21,7 +26,7 @@ export async function managerHireEmployee(formData: FormData) {
     // 2. Security: Hash the temporary security key
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // 3. Silo-Scoped Creation: Automatically link to the Manager's department
+    // 3. Silo-Scoped Creation: Automatically link to the Manager's department (if manager has one assigned)
     await prisma.employee.create({
       data: {
         name,
@@ -29,7 +34,7 @@ export async function managerHireEmployee(formData: FormData) {
         password: hashedPassword,
         position: position || "Workforce Member",
         role: role || "INTERN",
-        departmentId, // Auto-linked to the manager's silo
+        departmentId: departmentId || null, // Optional - only if manager has a department
         managerId,    // Sets the reporting hierarchy
       }
     });

@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
-import prisma from "../../../../../prismaClient";
+import { cookies } from "next/headers";
+import { prisma } from "@/lib/prisma";
 
-// GET: Fetch all attendance records for an employee
+// GET: Fetch attendance records for the authenticated employee
 export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const employeeId = searchParams.get("employeeId");
-    if (!employeeId) return NextResponse.json({ error: "Missing employeeId" }, { status: 400 });
+    const cookieStore = await cookies();
+    const userId = cookieStore.get("userId")?.value;
+
+    if (!userId) {
+      return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    }
 
     const records = await prisma.attendance.findMany({
-      where: { employeeId },
+      where: { employeeId: userId },
       orderBy: { timestamp: "desc" },
     });
     return NextResponse.json({ records }, { status: 200 });

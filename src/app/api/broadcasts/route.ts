@@ -3,26 +3,31 @@ import { prisma } from '../../../../lib/prisma';
 
 // GET: Fetch broadcasts for the current user role
 export async function GET(req: NextRequest) {
-  const role = req.nextUrl.searchParams.get('role'); // 'EMPLOYEE', 'MANAGER', 'HR'
-  if (!role) return NextResponse.json({ error: 'Role required' }, { status: 400 });
+  try {
+    const role = req.nextUrl.searchParams.get('role'); // 'EMPLOYEE', 'MANAGER', 'HR'
+    if (!role) return NextResponse.json({ error: 'Role required' }, { status: 400 });
 
-  let where = {};
-  if (role === 'EMPLOYEE') {
-    // Employees see all broadcasts
-    where = { };
-  } else if (role === 'MANAGER') {
-    // Managers see only HR broadcasts
-    where = { senderRole: 'HR' };
-  } else if (role === 'HR') {
-    // HR sees only their own broadcasts
-    where = { senderRole: 'HR' };
+    let where = {};
+    if (role === 'EMPLOYEE') {
+      // Employees see all broadcasts
+      where = { };
+    } else if (role === 'MANAGER') {
+      // Managers see only HR broadcasts
+      where = { senderRole: 'HR' };
+    } else if (role === 'HR') {
+      // HR sees only their own broadcasts
+      where = { senderRole: 'HR' };
+    }
+
+    const broadcasts = await prisma.broadcast.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+    return NextResponse.json({ broadcasts });
+  } catch (error: any) {
+    console.error("Error fetching broadcasts:", error);
+    return NextResponse.json({ error: "Failed to fetch broadcasts", broadcasts: [] }, { status: 500 });
   }
-
-  const broadcasts = await prisma.broadcast.findMany({
-    where,
-    orderBy: { createdAt: 'desc' },
-  });
-  return NextResponse.json({ broadcasts });
 }
 
 // POST: Create a new broadcast

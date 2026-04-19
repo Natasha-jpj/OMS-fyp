@@ -1,6 +1,6 @@
 "use client";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Briefcase, Target, Layers, AlignLeft } from "lucide-react";
+import { X, Briefcase, FileText, AlertCircle } from "lucide-react";
 import { createProject } from "../../actions/project";
 import { useTransition } from "react";
 
@@ -18,50 +18,126 @@ export function NewProjectModal({ isOpen, onClose, departmentId }: any) {
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[400] flex items-center justify-center p-6">
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-md" />
-          <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} className="relative bg-[#0A0A0B]/90 backdrop-blur-3xl w-full max-w-xl rounded-[2.5rem] p-10 border border-white/10 shadow-2xl overflow-hidden text-left" >
-            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-transparent via-[#FFD541] to-transparent opacity-50" />
-            <div className="flex justify-between items-center mb-8">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 text-[#FFD541]"><Layers size={20}/></div>
-                <div><h2 className="text-2xl font-bold text-white uppercase leading-none mb-1">New Mission</h2><p className="text-[9px] font-bold text-white/30 uppercase tracking-[0.2em]">Operational Silo Expansion</p></div>
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            onClick={onClose} 
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm" 
+          />
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0, y: 10 }} 
+            animate={{ scale: 1, opacity: 1, y: 0 }} 
+            exit={{ scale: 0.95, opacity: 0, y: 10 }}
+            className="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
+          >
+            {/* Header */}
+            <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
+                  <Briefcase size={15} className="text-white" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-black">Create Project</h2>
+                  <p className="text-xs text-slate-500">New initiative</p>
+                </div>
               </div>
-              <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-[#FFD541] transition-colors"><X size={18}/></button>
+              <button 
+                onClick={onClose} 
+                className="p-1 rounded-lg hover:bg-slate-100 transition-colors text-slate-600 hover:text-black"
+              >
+                <X size={16} />
+              </button>
             </div>
 
-            <form action={clientAction} className="space-y-5">
+            {/* Form Content */}
+            <form action={clientAction} className="p-5 space-y-2.5">
               <input type="hidden" name="departmentId" value={departmentId} />
-              <ModalInput name="name" label="Mission Designation" placeholder="Operation AuraSync" icon={<Briefcase size={16}/>} />
-              <div className="space-y-2">
-                <label className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/30 ml-1">Context Briefing</label>
-                <textarea name="description" rows={3} className="w-full bg-white/5 border border-white/10 focus:border-[#FFD541]/40 rounded-2xl p-5 outline-none text-xs font-medium text-white transition-all resize-none" placeholder="Provide mission context..." />
+              
+              {/* Project Name */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-black">
+                  Project Name <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Briefcase size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                    name="name" 
+                    type="text"
+                    className="w-full bg-white border border-slate-300 rounded-lg py-1.5 pl-9 pr-3 text-xs font-medium text-black placeholder:text-slate-500 outline-none focus:border-black focus:ring-1 focus:ring-black/5 transition-all" 
+                    placeholder="Project Alpha" 
+                    required 
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/30 ml-1">Operational Status</label>
-                <select name="status" className="w-full bg-white/5 border border-white/10 focus:border-[#FFD541]/40 rounded-2xl py-4 px-6 outline-none appearance-none font-medium text-xs text-white cursor-pointer">
-                  <option value="PLANNING" className="bg-[#0A0A0B]">Planning Stage</option>
-                  <option value="ORBIT" className="bg-[#0A0A0B]">Active in Orbit</option>
-                  <option value="COMPLETED" className="bg-[#0A0A0B]">Mission Accomplished</option>
+
+              {/* Description */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-black">
+                  Description <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <FileText size={14} className="absolute left-3 top-2 text-slate-400" />
+                  <textarea 
+                    name="description" 
+                    rows={2} 
+                    className="w-full bg-white border border-slate-300 rounded-lg py-1.5 pl-9 pr-3 text-xs font-medium text-black placeholder:text-slate-500 outline-none focus:border-black focus:ring-1 focus:ring-black/5 resize-none transition-all" 
+                    placeholder="Details..." 
+                    required 
+                  />
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-black">
+                  Status <span className="text-red-500">*</span>
+                </label>
+                <select 
+                  name="status" 
+                  className="w-full bg-white border border-slate-300 rounded-lg py-1.5 px-2.5 text-xs font-medium text-black outline-none focus:border-black focus:ring-1 focus:ring-black/5 cursor-pointer appearance-none transition-all"
+                  required
+                >
+                  <option value="PLANNING" className="text-black">Planning</option>
+                  <option value="ORBIT" className="text-black">In Progress</option>
+                  <option value="COMPLETED" className="text-black">Completed</option>
                 </select>
               </div>
-              <button disabled={isPending} type="submit" className="w-full py-5 bg-[#FFD541] text-black rounded-full font-bold uppercase text-[11px] tracking-[0.2em] shadow-xl hover:bg-white transition-all mt-4">{isPending ? "Transmitting..." : "Initialize Project Silo"}</button>
+
+              {/* Info Banner - Minimal */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 mt-1.5">
+                <p className="text-xs font-semibold text-yellow-900">⚡ Track work & assign team</p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-1.5">
+                <button 
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 py-1.5 rounded-lg border border-slate-300 text-black font-semibold text-xs hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  disabled={isPending} 
+                  type="submit" 
+                  className="flex-1 py-1.5 rounded-lg bg-black text-white font-semibold text-xs hover:bg-slate-900 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                >
+                  {isPending ? (
+                    <>
+                      <div className="w-2.5 h-2.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Creating
+                    </>
+                  ) : (
+                    "Create Project"
+                  )}
+                </button>
+              </div>
             </form>
           </motion.div>
         </div>
       )}
     </AnimatePresence>
-  );
-}
-
-function ModalInput({ label, placeholder, icon, name }: any) {
-  return (
-    <div className="space-y-2">
-      <label className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/30 ml-1">{label}</label>
-      <div className="relative">
-        <div className="absolute left-5 top-1/2 -translate-y-1/2 text-white/20">{icon}</div>
-        <input name={name} className="w-full bg-white/5 border border-white/10 focus:border-[#FFD541]/40 rounded-2xl py-4 pl-14 pr-6 outline-none text-xs font-medium text-white transition-all placeholder:text-white/10 backdrop-blur-sm" placeholder={placeholder} required />
-      </div>
-    </div>
   );
 }

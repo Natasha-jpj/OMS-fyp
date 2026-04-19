@@ -1,31 +1,38 @@
 import { NextResponse } from "next/server";
-import prisma from "../../../../../prismaClient";
+import { cookies } from "next/headers";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
   try {
-    const { employeeId, timestamp, photo } = await req.json();
+    const cookieStore = await cookies();
+    const userId = cookieStore.get("userId")?.value;
 
-    if (!timestamp || !employeeId) {
-      return NextResponse.json({ error: "employeeId and timestamp are required" }, { status: 400 });
+    if (!userId) {
+      return NextResponse.json({ error: "Not logged in" }, { status: 401 });
     }
 
-    // Ensure employee exists
-    const emp = await prisma.employee.findUnique({ where: { id: employeeId } });
+    const { timestamp, photo } = await req.json();
+
+    if (!timestamp) {
+      return NextResponse.json({ error: "timestamp required" }, { status: 400 });
+    }
+
+    // Verify employee exists
+    const emp = await prisma.employee.findUnique({ where: { id: userId } });
     if (!emp) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
 
-    // TODO: get employeeId from auth token; for now optional
     const record = await prisma.attendance.create({
       data: {
-        employeeId,
+        employeeId: userId,
         type: "CHECKIN",
         timestamp: new Date(timestamp),
         photo,
       },
     });
 
-    return NextResponse.json({ message: "Check-in recorded", record }, { status: 201 });
+    return NextResponse.json({ message: "Checked in", record }, { status: 201 });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: "Failed to record check-in" }, { status: 500 });
+    return NextResponse.json({ error: "Check-in failed" }, { status: 500 });
   }
 }

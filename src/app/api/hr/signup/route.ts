@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma'; 
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    console.log("Incoming Signup Request:", body.email); // Debug Log
 
     const { name, email, password, phone, organization, organizationDomain } = body;
 
@@ -42,25 +42,42 @@ export async function POST(req: Request) {
       },
     });
 
-    console.log("HR Created Successfully:", hr.id);
+    // 5. Generate JWT Token (same as login)
+    const token = jwt.sign(
+      { id: hr.id, role: 'ADMIN', organization: hr.organization },
+      process.env.JWT_SECRET!,
+      { expiresIn: '1d' }
+    );
 
-    return NextResponse.json({ 
+    // 6. Create response with token cookie
+    const response = NextResponse.json({ 
       message: 'Organization established', 
       hr: { 
         id: hr.id, 
         name: hr.name, 
         email: hr.email, 
         organization: hr.organization 
-      } 
+      }
     }, { status: 201 });
 
-  } catch (err: any) {
+    // 7. Set secure httpOnly cookie
+    response.cookies.set('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 86400, // 1 day
+      path: '/',
+    });
+
+    return response;
+
+  } catch (err: unknown) {
     // THIS LOG WILL TELL US THE REAL REASON IN THE TERMINAL
     console.error("FULL SIGNUP CRASH LOG:", err); 
     
     return NextResponse.json({ 
-      error: err.message || 'Internal server error',
-      details: err.code // Prisma error code if available
+      error: (err as Error).message || 'Internal server error',
+      details: (err as { code?: string }) .code // Prisma error code if available
     }, { status: 500 });
   }
 }

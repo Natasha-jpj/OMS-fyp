@@ -2,9 +2,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-
-// ... existing imports
 
 export async function POST(req: Request) {
   try {
@@ -18,8 +15,6 @@ export async function POST(req: Request) {
         ]
       },
       include: {
-        // FIXED: Using 'manages' instead of 'managedDepartment' 
-        // as per your current Prisma error output
         manages: true 
       }
     });
@@ -29,28 +24,28 @@ export async function POST(req: Request) {
     const isMatch = await bcrypt.compare(password, employee.password);
     if (!isMatch) return NextResponse.json({ error: "Invalid Security Key" }, { status: 401 });
 
-    if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET missing");
-
-    const token = jwt.sign(
-      { id: employee.id, role: employee.role }, 
-      process.env.JWT_SECRET, 
-      { expiresIn: '1d' }
-    );
-
-    return NextResponse.json({
-      token,
+    const response = NextResponse.json({
       employee: {
         id: employee.id,
         name: employee.name,
         role: employee.role,
         departmentId: employee.departmentId,
-        // Match the field here too
-        managedDepartment: employee.manages, 
         organization: "Pcity Tech"
       }
     });
+
+    // Simple: Just set user ID in cookie
+    response.cookies.set("userId", employee.id, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 86400 * 7, // 7 days
+      path: "/"
+    });
+
+    return response;
   } catch (error: any) {
-    console.error("AUTH_CRASH:", error.message);
+    console.error("Login error:", error.message);
     return NextResponse.json({ error: "Authentication Error" }, { status: 500 });
   }
 }

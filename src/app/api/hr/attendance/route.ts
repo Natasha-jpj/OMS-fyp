@@ -1,12 +1,25 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
 import prisma from "../../../../../prismaClient";
 
 export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const hrId = searchParams.get("hrId");
+    // Get JWT token from cookies
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token")?.value;
 
-    if (!hrId) return NextResponse.json({ error: "HR ID is required" }, { status: 400 });
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Verify and decode token to get hrId
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { id?: string; role?: string };
+    const hrId = decoded?.id;
+
+    if (!hrId || decoded?.role !== 'ADMIN') {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    }
 
     const employees = await prisma.employee.findMany({
       where: { department: { hrId } },
