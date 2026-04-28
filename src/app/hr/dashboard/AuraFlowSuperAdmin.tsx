@@ -123,7 +123,6 @@ function StatCard({ label, value, sub, icon, trend, trendUp = true, gold = false
 function LeaveWidget({ onRefresh, isDateInRange, onClickDetail }: { onRefresh?: () => void; isDateInRange?: (date: string) => boolean; onClickDetail?: () => void }) {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [approving, setApproving] = useState<string | null>(null);
 
   const fetchLeaves = async () => {
     setLoading(true);
@@ -142,46 +141,6 @@ function LeaveWidget({ onRefresh, isDateInRange, onClickDetail }: { onRefresh?: 
     fetchLeaves();
   }, []);
 
-  const handleApprove = async (leaveId: string) => {
-    setApproving(leaveId);
-    try {
-      const res = await fetch("/api/hr/leave", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ leaveRequestId: leaveId, status: "APPROVED" })
-      });
-      if (res.ok) {
-        await fetchLeaves();
-        onRefresh?.();
-      }
-    } catch (e) {
-      console.error("Approval failed", e);
-    } finally {
-      setApproving(null);
-    }
-  };
-
-  const handleReject = async (leaveId: string) => {
-    setApproving(leaveId);
-    try {
-      const res = await fetch("/api/hr/leave", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ leaveRequestId: leaveId, status: "REJECTED" })
-      });
-      if (res.ok) {
-        await fetchLeaves();
-        onRefresh?.();
-      }
-    } catch (e) {
-      console.error("Rejection failed", e);
-    } finally {
-      setApproving(null);
-    }
-  };
-
   const filteredLeaves = leaves.filter(l => 
     (isDateInRange?.(l.startDate) ?? true) && (isDateInRange?.(l.endDate) ?? true)
   );
@@ -195,7 +154,7 @@ function LeaveWidget({ onRefresh, isDateInRange, onClickDetail }: { onRefresh?: 
       className="rounded-2xl border p-5 flex flex-col h-full bg-slate-50 border-slate-200 cursor-pointer hover:shadow-md transition-all group">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-semibold text-black">Leave Management</h3>
+          <h3 className="text-sm font-semibold text-black">Leave Requests</h3>
           <p className="text-[11px] text-slate-600 mt-0.5">{pending} pending • {approved} approved • {rejected} rejected</p>
         </div>
         <span className="text-xs font-semibold bg-black text-white px-2.5 py-1 rounded-full group-hover:bg-slate-900 transition-colors">{filteredLeaves.length}</span>
@@ -209,11 +168,11 @@ function LeaveWidget({ onRefresh, isDateInRange, onClickDetail }: { onRefresh?: 
         </div>
       ) : (
         <div className="space-y-2 overflow-y-auto flex-1 pr-1">
-          {filteredLeaves.slice(0, 1).map(l => (
+          {filteredLeaves.slice(0, 4).map(l => (
             <div key={l.id} className={`flex items-start gap-3 p-3 rounded-xl border transition-colors
               ${l.status === 'APPROVED' ? 'bg-emerald-50 border-emerald-200' : 
                 l.status === 'REJECTED' ? 'bg-red-50 border-red-200' : 
-                'bg-slate-150 border-slate-300'}`}>
+                'bg-amber-50 border-amber-200'}`}>
               <Avatar name={l.employee?.name || "?"} px={32} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 mb-1">
@@ -224,23 +183,9 @@ function LeaveWidget({ onRefresh, isDateInRange, onClickDetail }: { onRefresh?: 
                   <Badge status={l.status} />
                 </div>
                 <p className="text-xs mt-1 truncate text-slate-700">{l.title}</p>
-                <div className="flex items-center justify-between mt-2">
-                  <p className="text-[11px] text-slate-600">
-                    {new Date(l.startDate).toLocaleDateString()} → {new Date(l.endDate).toLocaleDateString()}
-                  </p>
-                  {l.status === 'PENDING' && (
-                    <div className="flex gap-1.5">
-                      <button onClick={(e) => { e.stopPropagation(); handleApprove(l.id); }} disabled={approving === l.id}
-                        className="text-[11px] font-semibold px-2 py-1 rounded-lg transition-all bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50">
-                        {approving === l.id ? "..." : "Approve"}
-                      </button>
-                      <button onClick={(e) => { e.stopPropagation(); handleReject(l.id); }} disabled={approving === l.id}
-                        className="text-[11px] font-semibold px-2 py-1 rounded-lg transition-all bg-red-500 text-white hover:bg-red-600 disabled:opacity-50">
-                        {approving === l.id ? "..." : "Reject"}
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <p className="text-[11px] text-slate-600 mt-1">
+                  {new Date(l.startDate).toLocaleDateString()} → {new Date(l.endDate).toLocaleDateString()}
+                </p>
               </div>
             </div>
           ))}
@@ -539,6 +484,10 @@ export default function AuraFlowSuperAdmin({ initialDepts = [], existingEmployee
   const [broadcastInput, setBroadcastInput] = useState("");
   const [leaveStats, setLeaveStats] = useState({ pending: 0, approved: 0, rejected: 0 });
   const [salaryAudits, setSalaryAudits] = useState<AuditLog[]>([]);
+  const [allLeaveRequests, setAllLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [leaveCurrentPage, setLeaveCurrentPage] = useState(1);
+  const [leaveAbsenceDateFilter, setLeaveAbsenceDateFilter] = useState("");
+  const [leaveItemsPerPage] = useState(10);
 
   // UI
   const [showCreateDept, setShowCreateDept] = useState(false);
@@ -592,6 +541,7 @@ export default function AuraFlowSuperAdmin({ initialDepts = [], existingEmployee
           else if (l.status === 'REJECTED') stats.rejected++;
         });
         setLeaveStats(stats);
+        setAllLeaveRequests(lR.leaveRequests);
       }
       if (sR.audits) setSalaryAudits(sR.audits);
       if (tR.tasks || Array.isArray(tR)) setTasks(Array.isArray(tR) ? tR : tR.tasks || []);
@@ -790,24 +740,6 @@ export default function AuraFlowSuperAdmin({ initialDepts = [], existingEmployee
             <span className="text-sm font-semibold text-black">{activeTab}</span>
           </div>
 
-          {/* Center pill */}
-          <div className="hidden xl:flex items-center gap-6 px-6 py-2 rounded-full border bg-slate-50 border-slate-200 backdrop-blur-sm">
-            {[
-              { icon: <Users size={12} />,      val: employees.length,   label: "Personnel",   color: "text-black"       },
-              { icon: <Landmark size={12} />,   val: `Rs. ${(employees.length * 85000).toLocaleString()}`,        label: "Est. Payroll",      color: "text-black"       },
-              { icon: <ShieldCheck size={12} />,val: "Root",             label: "Access",      color: "text-emerald-600" },
-              { icon: <Building2 size={12} />,  val: departments.length, label: "Departments", color: "text-black"       },
-            ].map((m, i) => (
-              <React.Fragment key={i}>
-                {i > 0 && <div className="w-px h-3 bg-slate-300" />}
-                <div className="flex items-center gap-1.5">
-                  <span className={m.color}>{m.icon}</span>
-                  <span className={`text-xs font-medium ${m.color}`}>{m.val}</span>
-                  <span className="text-xs text-slate-600 opacity-70">{m.label}</span>
-                </div>
-              </React.Fragment>
-            ))}
-          </div>
 
           {/* Right actions */}
           <div className="flex items-center gap-1.5">
@@ -820,14 +752,7 @@ export default function AuraFlowSuperAdmin({ initialDepts = [], existingEmployee
             {/* Connect Button */}
             <ChatConnectButton onClick={() => setChatOpen(true)} isActive={chatOpen} />
 
-            {/* Notifications */}
-            <div className="relative">
-              <button onClick={() => setNotifOpen(o => !o)}
-                className="w-9 h-9 rounded-lg border flex items-center justify-center relative transition-colors bg-slate-50 border-slate-200 opacity-100 hover:bg-slate-100">
-                <Bell size={15} strokeWidth={2.5} className="text-slate-600" />
-                <div className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-              </button>
-            </div>
+          
 
             {/* Logout Button */}
             <button onClick={handleLogout} title="Logout"
@@ -1312,16 +1237,192 @@ export default function AuraFlowSuperAdmin({ initialDepts = [], existingEmployee
                     <p className="text-sm mt-0.5 text-slate-700">Track and approve employee leave requests by department</p>
                   </div>
                 </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <StatCard label="Pending"  value={leaveStats.pending} icon={<Clock size={15} />} sub="Awaiting review" onClick={() => {}} />
-                  <StatCard label="Approved" value={leaveStats.approved} icon={<CheckCircle size={15} />} trend="This month" onClick={() => {}} />
-                  <StatCard label="Rejected" value={leaveStats.rejected} icon={<MinusCircle size={15} />} trendUp={false} onClick={() => {}} />
-                </div>
-                
+
+                {/* Filter and Stats Section */}
                 <div className="grid grid-cols-12 gap-4">
-                  <div className="col-span-12"><LeaveWidget onRefresh={syncSystem} /></div>
+                  {/* Filter */}
+                  <div className="col-span-12 lg:col-span-6">
+                    <div className="rounded-xl border p-4 bg-slate-50 border-slate-200">
+                      <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-2">Filter by Absence Date</label>
+                      <div className="flex gap-2 items-center">
+                        <input type="date" value={leaveAbsenceDateFilter} onChange={e => { setLeaveAbsenceDateFilter(e.target.value); setLeaveCurrentPage(1); }}
+                          className="flex-1 border rounded-lg px-4 py-2.5 text-sm outline-none transition-colors bg-white border-slate-300 text-black focus:border-blue-900" />
+                        {leaveAbsenceDateFilter && (
+                          <button onClick={() => { setLeaveAbsenceDateFilter(""); setLeaveCurrentPage(1); }}
+                            className="px-4 py-2.5 rounded-lg text-sm font-medium transition-colors bg-red-100 text-red-700 hover:bg-red-200">
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      {leaveAbsenceDateFilter && (
+                        <p className="text-xs text-slate-600 mt-2">Showing employees absent on {new Date(leaveAbsenceDateFilter).toLocaleDateString()}</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Stats */}
+                  <div className="col-span-12 lg:col-span-6 grid grid-cols-3 gap-2">
+                    <div className="rounded-xl border p-3 bg-amber-50 border-amber-200">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Clock size={13} className="text-amber-600" />
+                        <p className="text-[10px] font-semibold text-amber-700 uppercase">Pending</p>
+                      </div>
+                      <p className="text-2xl font-bold text-amber-900">{leaveStats.pending}</p>
+                    </div>
+                    <div className="rounded-xl border p-3 bg-emerald-50 border-emerald-200">
+                      <div className="flex items-center gap-2 mb-1">
+                        <CheckCircle size={13} className="text-emerald-600" />
+                        <p className="text-[10px] font-semibold text-emerald-700 uppercase">Approved</p>
+                      </div>
+                      <p className="text-2xl font-bold text-emerald-900">{leaveStats.approved}</p>
+                    </div>
+                    <div className="rounded-xl border p-3 bg-red-50 border-red-200">
+                      <div className="flex items-center gap-2 mb-1">
+                        <MinusCircle size={13} className="text-red-600" />
+                        <p className="text-[10px] font-semibold text-red-700 uppercase">Rejected</p>
+                      </div>
+                      <p className="text-2xl font-bold text-red-900">{leaveStats.rejected}</p>
+                    </div>
+                  </div>
                 </div>
+                
+                <div className="rounded-2xl border overflow-hidden bg-slate-50 border-slate-200">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-slate-200">
+                        {["Employee", "Type", "Department", "Period", "Reason", "Status", "Actions"].map(h => (
+                          <th key={h} className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-600">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        let filtered = allLeaveRequests;
+                        if (leaveAbsenceDateFilter) {
+                          const filterDate = new Date(leaveAbsenceDateFilter);
+                          filtered = filtered.filter(req => {
+                            const start = new Date(req.startDate);
+                            const end = new Date(req.endDate);
+                            return filterDate >= start && filterDate <= end && req.status === 'APPROVED';
+                          });
+                        }
+                        const totalPages = Math.ceil(filtered.length / leaveItemsPerPage);
+                        const startIdx = (leaveCurrentPage - 1) * leaveItemsPerPage;
+                        const endIdx = startIdx + leaveItemsPerPage;
+                        const paginatedLeaves = filtered.slice(startIdx, endIdx);
+
+                        return paginatedLeaves.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-5 py-8 text-center text-slate-500 text-sm">
+                              {leaveAbsenceDateFilter ? "No employees absent on this date" : "No leave requests found"}
+                            </td>
+                          </tr>
+                        ) : (
+                          paginatedLeaves.map(req => (
+                            <tr key={req.id} className="border-b border-slate-200 hover:bg-slate-100 transition-colors">
+                              <td className="px-5 py-3.5">
+                                <div className="flex items-center gap-3">
+                                  <Avatar name={req.employee?.name || "?"} px={30} />
+                                  <span className="text-sm font-semibold text-black">{req.employee?.name}</span>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full
+                                  ${req.employee?.role === "MANAGER" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-700"}`}>
+                                  {req.employee?.role === "MANAGER" ? "Manager" : "Employee"}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 text-sm text-slate-700">
+                                {req.employee?.department?.name || "Unassigned"}
+                              </td>
+                              <td className="px-5 py-3.5 text-sm text-slate-700">
+                                {new Date(req.startDate).toLocaleDateString()} – {new Date(req.endDate).toLocaleDateString()}
+                              </td>
+                              <td className="px-5 py-3.5 text-sm text-slate-600">{req.title || "-"}</td>
+                              <td className="px-5 py-3.5">
+                                <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full
+                                  ${req.status === "PENDING" ? "bg-amber-100 text-amber-700" : req.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                                  {req.status}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                {req.status === "PENDING" && req.employee?.role === "MANAGER" ? (
+                                  <div className="flex gap-2">
+                                    <button 
+                                      onClick={async () => {
+                                        try {
+                                          const res = await fetch("/api/hr/leave", {
+                                            method: "PATCH",
+                                            headers: { "Content-Type": "application/json" },
+                                            credentials: "include",
+                                            body: JSON.stringify({ leaveRequestId: req.id, status: "APPROVED" }),
+                                          });
+                                          if (res.ok) {
+                                            await syncSystem();
+                                          }
+                                        } catch (err) {
+                                          console.error("Failed to approve:", err);
+                                        }
+                                      }}
+                                      className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-emerald-700 hover:bg-emerald-100">Approve</button>
+                                    <button 
+                                      onClick={async () => {
+                                        try {
+                                          const res = await fetch("/api/hr/leave", {
+                                            method: "PATCH",
+                                            headers: { "Content-Type": "application/json" },
+                                            credentials: "include",
+                                            body: JSON.stringify({ leaveRequestId: req.id, status: "REJECTED" }),
+                                          });
+                                          if (res.ok) {
+                                            await syncSystem();
+                                          }
+                                        } catch (err) {
+                                          console.error("Failed to reject:", err);
+                                        }
+                                      }}
+                                      className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-red-700 hover:bg-red-100">Reject</button>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-500">-</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        );
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                {(() => {
+                  let filtered = allLeaveRequests;
+                  if (leaveAbsenceDateFilter) {
+                    const filterDate = new Date(leaveAbsenceDateFilter);
+                    filtered = filtered.filter(req => {
+                      const start = new Date(req.startDate);
+                      const end = new Date(req.endDate);
+                      return filterDate >= start && filterDate <= end && req.status === 'APPROVED';
+                    });
+                  }
+                  const totalPages = Math.ceil(filtered.length / leaveItemsPerPage);
+                  return totalPages > 1 ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-600">Page {leaveCurrentPage} of {totalPages} ({filtered.length} total)</span>
+                      <div className="flex gap-1.5">
+                        <button onClick={() => setLeaveCurrentPage(p => Math.max(1, p - 1))} disabled={leaveCurrentPage === 1}
+                          className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                          ← Prev
+                        </button>
+                        <button onClick={() => setLeaveCurrentPage(p => Math.min(totalPages, p + 1))} disabled={leaveCurrentPage === totalPages}
+                          className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                          Next →
+                        </button>
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
               </motion.div>
             )}
 

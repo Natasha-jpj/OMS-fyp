@@ -21,19 +21,36 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get all leave requests for this HR's departments
+    // Get all leave requests for this HR's departments (both employees and managers)
     const departments = await prisma.department.findMany({
       where: { hrId },
       select: { id: true }
     });
 
+    const deptIds = departments.map(d => d.id);
+
     const leaveRequests = await prisma.leaveRequest.findMany({
       where: {
-        employee: {
-          departmentId: {
-            in: departments.map(d => d.id)
+        OR: [
+          // Employees in this HR's departments
+          {
+            employee: {
+              departmentId: {
+                in: deptIds
+              }
+            }
+          },
+          // Managers of this HR's departments
+          {
+            employee: {
+              manages: {
+                some: {
+                  id: { in: deptIds }
+                }
+              }
+            }
           }
-        }
+        ]
       },
       include: {
         employee: {
@@ -41,6 +58,7 @@ export async function GET(req: NextRequest) {
             id: true,
             name: true,
             email: true,
+            role: true,
             department: { select: { id: true, name: true } },
           },
         },

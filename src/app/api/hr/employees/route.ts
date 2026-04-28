@@ -46,6 +46,12 @@ export async function GET() {
         position: true,
         role: true,
         departmentId: true,
+        phone: true,
+        salary: true,
+        contractType: true,
+        contractEndDate: true,
+        employmentStatus: true,
+        contractUrl: true,
         department: {
           select: {
             id: true,

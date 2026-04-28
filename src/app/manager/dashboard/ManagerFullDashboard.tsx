@@ -19,6 +19,8 @@ import { sendMessage } from "../../actions/messaging";
 import { ChatWindow } from "../../components/ChatWindow";
 import { ChatConnectButton } from "../../components/ChatConnectButton";
 import KanbanBoard from "../../employee/dashboard/KanbanBoard";
+import CalendarWidget from "../../components/CalendarWidget";
+import LeaveRequestModal from "../../employee/components/LeaveRequestModal";
 
 // ─── AVATAR ─────────────────────────────────────────────────────────────
 function Avatar({ name, px = 36 }: { name: string; px?: number }) {
@@ -173,6 +175,8 @@ export default function ManagerFullDashboard({ allEmployees = [] }: any) {
   const [broadcastInput, setBroadcastInput] = useState("");
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
+  const [leaveModalOpen, setLeaveModalOpen] = useState(false);
+  const [leaveSelectedDates, setLeaveSelectedDates] = useState<{ start: string; end?: string }>({ start: "" });
   const [selectedEmployee, setSelectedEmployee] = useState("");
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
   const [isHireModalOpen, setIsHireModalOpen] = useState(false);
@@ -194,6 +198,11 @@ export default function ManagerFullDashboard({ allEmployees = [] }: any) {
     } catch (err) {
       console.error("Logout failed:", err);
     }
+  };
+
+  const handleCalendarDayClick = (dateStr: string) => {
+    setLeaveSelectedDates({ start: dateStr });
+    setLeaveModalOpen(true);
   };
 
   useRealTimeGlobal((newMsg: any) => {});
@@ -416,22 +425,7 @@ export default function ManagerFullDashboard({ allEmployees = [] }: any) {
             <span className="text-sm font-semibold text-black">{activeTab}</span>
           </div>
 
-          <div className="hidden xl:flex items-center gap-6 px-6 py-2 rounded-full border bg-slate-50 border-slate-200 backdrop-blur-sm">
-            {[
-              { icon: <Users size={12} />, val: employees.length, label: "Team Size", color: "text-black" },
-              { icon: <Briefcase size={12} />, val: projects.length, label: "Projects", color: "text-black" },
-              { icon: <ListChecks size={12} />, val: tasks.length, label: "Tasks", color: "text-black" },
-            ].map((m, i) => (
-              <React.Fragment key={i}>
-                {i > 0 && <div className="w-px h-3 bg-slate-300" />}
-                <div className="flex items-center gap-1.5">
-                  <span className={m.color}>{m.icon}</span>
-                  <span className={`text-xs font-medium ${m.color}`}>{m.val}</span>
-                  <span className="text-xs text-slate-600 opacity-70">{m.label}</span>
-                </div>
-              </React.Fragment>
-            ))}
-          </div>
+         
 
           <div className="flex items-center gap-1.5">
             <ChatConnectButton onClick={() => setChatOpen(true)} isActive={chatOpen} />
@@ -611,92 +605,108 @@ export default function ManagerFullDashboard({ allEmployees = [] }: any) {
               <motion.div key="leaves" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div>
-                    <h2 className="text-2xl font-bold text-black">Leave Requests</h2>
-                    <p className="text-sm mt-0.5 text-slate-700">{leaveRequests.length} total requests</p>
+                    <h2 className="text-2xl font-bold text-black">Leave Management</h2>
+                    <p className="text-sm mt-0.5 text-slate-700">Request your leave or manage team requests</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <StatCard label="Pending" value={leaveRequests.filter(l => l.status === "PENDING").length} icon={<Clock size={15} />} sub="Awaiting review" />
-                  <StatCard label="Approved" value={leaveRequests.filter(l => l.status === "APPROVED").length} icon={<CheckCircle size={15} />} trend="This month" />
-                  <StatCard label="Rejected" value={leaveRequests.filter(l => l.status === "REJECTED").length} icon={<MinusCircle size={15} />} trendUp={false} />
-                </div>
-                <div className="rounded-2xl border overflow-hidden bg-slate-50 border-slate-200">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="border-b border-slate-200">
-                        {["Employee", "Department", "Period", "Reason", "Status", "Actions"].map(h => (
-                          <th key={h} className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-600">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {leaveRequests.map(req => (
-                        <tr key={req.id} className="border-b border-slate-200 hover:bg-slate-100 transition-colors">
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-3">
-                              <Avatar name={req.employee?.name || "?"} px={30} />
-                              <span className="text-sm font-semibold text-black">{req.employee?.name}</span>
-                            </div>
-                          </td>
-                          <td className="px-5 py-3.5 text-sm text-slate-700">
-                            {req.employee?.department?.name || "Unassigned"}
-                          </td>
-                          <td className="px-5 py-3.5 text-sm text-slate-700">
-                            {new Date(req.startDate).toLocaleDateString()} – {new Date(req.endDate).toLocaleDateString()}
-                          </td>
-                          <td className="px-5 py-3.5 text-sm text-slate-600">{req.title || "-"}</td>
-                          <td className="px-5 py-3.5">
-                            <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full
-                              ${req.status === "PENDING" ? "bg-amber-100 text-amber-700" : req.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                              {req.status}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            {req.status === "PENDING" && (
-                              <div className="flex gap-2">
-                                <button 
-                                  onClick={async () => {
-                                    try {
-                                      const res = await fetch("/api/leave", {
-                                        method: "PATCH",
-                                        headers: { "Content-Type": "application/json" },
-                                        credentials: "include",
-                                        body: JSON.stringify({ leaveRequestId: req.id, status: "APPROVED" }),
-                                      });
-                                      if (res.ok) {
-                                        const updated = await fetch(`/api/leave?type=manager`, { credentials: "include" }).then(r => r.json());
-                                        setLeaveRequests(updated.leaveRequests || []);
-                                      }
-                                    } catch (err) {
-                                      console.error("Failed to approve:", err);
-                                    }
-                                  }}
-                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-emerald-700 hover:bg-emerald-100">Approve</button>
-                                <button 
-                                  onClick={async () => {
-                                    try {
-                                      const res = await fetch("/api/leave", {
-                                        method: "PATCH",
-                                        headers: { "Content-Type": "application/json" },
-                                        credentials: "include",
-                                        body: JSON.stringify({ leaveRequestId: req.id, status: "REJECTED" }),
-                                      });
-                                      if (res.ok) {
-                                        const updated = await fetch(`/api/leave?type=manager`, { credentials: "include" }).then(r => r.json());
-                                        setLeaveRequests(updated.leaveRequests || []);
-                                      }
-                                    } catch (err) {
-                                      console.error("Failed to reject:", err);
-                                    }
-                                  }}
-                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-red-700 hover:bg-red-100">Reject</button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+
+                {/* Manager's Own Leave + Team Requests */}
+                <div className="grid grid-cols-12 gap-4">
+                  {/* Calendar - Left Side */}
+                  <div className="col-span-12 lg:col-span-4">
+                    <div className="rounded-2xl border p-5 bg-slate-50 border-slate-200">
+                      <h3 className="text-sm font-semibold text-black mb-4">Request Your Leave</h3>
+                      <CalendarWidget onDayClick={handleCalendarDayClick} />
+                      <p className="text-xs text-slate-600 mt-4">Click a date to request leave</p>
+                    </div>
+                  </div>
+
+                  {/* Team Leave Requests - Right Side */}
+                  <div className="col-span-12 lg:col-span-8 space-y-4">
+                    <div className="grid grid-cols-3 gap-4">
+                      <StatCard label="Pending" value={leaveRequests.filter(l => l.status === "PENDING").length} icon={<Clock size={15} />} sub="Awaiting review" />
+                      <StatCard label="Approved" value={leaveRequests.filter(l => l.status === "APPROVED").length} icon={<CheckCircle size={15} />} trend="This month" />
+                      <StatCard label="Rejected" value={leaveRequests.filter(l => l.status === "REJECTED").length} icon={<MinusCircle size={15} />} trendUp={false} />
+                    </div>
+                    <div className="rounded-2xl border overflow-hidden bg-slate-50 border-slate-200">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="border-b border-slate-200">
+                            {["Employee", "Department", "Period", "Reason", "Status", "Actions"].map(h => (
+                              <th key={h} className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-600">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {leaveRequests.map(req => (
+                            <tr key={req.id} className="border-b border-slate-200 hover:bg-slate-100 transition-colors">
+                              <td className="px-5 py-3.5">
+                                <div className="flex items-center gap-3">
+                                  <Avatar name={req.employee?.name || "?"} px={30} />
+                                  <span className="text-sm font-semibold text-black">{req.employee?.name}</span>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3.5 text-sm text-slate-700">
+                                {req.employee?.department?.name || "Unassigned"}
+                              </td>
+                              <td className="px-5 py-3.5 text-sm text-slate-700">
+                                {new Date(req.startDate).toLocaleDateString()} – {new Date(req.endDate).toLocaleDateString()}
+                              </td>
+                              <td className="px-5 py-3.5 text-sm text-slate-600">{req.title || "-"}</td>
+                              <td className="px-5 py-3.5">
+                                <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full
+                                  ${req.status === "PENDING" ? "bg-amber-100 text-amber-700" : req.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                                  {req.status}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                {req.status === "PENDING" && (
+                                  <div className="flex gap-2">
+                                    <button 
+                                      onClick={async () => {
+                                        try {
+                                          const res = await fetch("/api/leave", {
+                                            method: "PATCH",
+                                            headers: { "Content-Type": "application/json" },
+                                            credentials: "include",
+                                            body: JSON.stringify({ leaveRequestId: req.id, status: "APPROVED" }),
+                                          });
+                                          if (res.ok) {
+                                            const updated = await fetch(`/api/leave?type=manager`, { credentials: "include" }).then(r => r.json());
+                                            setLeaveRequests(updated.leaveRequests || []);
+                                          }
+                                        } catch (err) {
+                                          console.error("Failed to approve:", err);
+                                        }
+                                      }}
+                                      className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-emerald-700 hover:bg-emerald-100">Approve</button>
+                                    <button 
+                                      onClick={async () => {
+                                        try {
+                                          const res = await fetch("/api/leave", {
+                                            method: "PATCH",
+                                            headers: { "Content-Type": "application/json" },
+                                            credentials: "include",
+                                            body: JSON.stringify({ leaveRequestId: req.id, status: "REJECTED" }),
+                                          });
+                                          if (res.ok) {
+                                            const updated = await fetch(`/api/leave?type=manager`, { credentials: "include" }).then(r => r.json());
+                                            setLeaveRequests(updated.leaveRequests || []);
+                                          }
+                                        } catch (err) {
+                                          console.error("Failed to reject:", err);
+                                        }
+                                      }}
+                                      className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-red-700 hover:bg-red-100">Reject</button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -787,6 +797,32 @@ export default function ManagerFullDashboard({ allEmployees = [] }: any) {
       <NewDirectiveModal isOpen={isTaskModalOpen} onClose={() => setIsTaskModalOpen(false)} employees={employees} manager={manager} />
       <ManagerHireModal isOpen={isHireModalOpen} onClose={() => setIsHireModalOpen(false)} manager={manager} />
       <NewProjectModal isOpen={isProjectModalOpen} onClose={() => setIsProjectModalOpen(false)} departmentId={manager?.departmentId} />
+      
+      {/* Leave Request Modal */}
+      <AnimatePresence>
+        {leaveModalOpen && (
+          <LeaveRequestModal
+            selectedDates={leaveSelectedDates}
+            onClose={() => setLeaveModalOpen(false)}
+            onSubmit={async data => {
+              try {
+                const res = await fetch("/api/leave", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(data),
+                });
+                if (res.ok) {
+                  setLeaveModalOpen(false);
+                  const d = await fetch(`/api/leave?type=manager`, { credentials: "include" }).then(r => r.json());
+                  setLeaveRequests(d.leaveRequests || []);
+                }
+              } catch {
+                alert("Failed to submit leave request");
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Photo Modal */}
       <AnimatePresence>
