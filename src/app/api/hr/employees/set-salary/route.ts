@@ -38,23 +38,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized: Employee does not belong to your account" }, { status: 403 });
     }
 
-    // Get previous salary from most recent audit record
-    const previousAudit = await prisma.salaryAudit.findFirst({
-      where: { employeeId },
-      orderBy: { createdAt: "desc" },
-      take: 1
+    // Get previous salary change from payrollAuditLog (if any)
+    const previousAudit = await prisma.payrollAuditLog.findFirst({
+      where: { entityType: 'SalaryAudit', entityId: employeeId },
+      orderBy: { createdAt: 'desc' },
     });
 
-    // Create salary audit record with old and new salary
-    const salaryAudit = await prisma.salaryAudit.create({
+    // Resolve organizationId from HR profile
+    const hr = await prisma.hR.findUnique({ where: { id: hrId } });
+    const organizationId = hr?.organization || "";
+
+    const prevChanges = previousAudit?.changes as any;
+    const prevOldSalary = (prevChanges && (prevChanges.oldSalary ?? prevChanges.newSalary)) ?? 0;
+
+    // Create a generic audit log entry instead of a dedicated SalaryAudit table
+    const salaryAudit = await prisma.payrollAuditLog.create({
       data: {
-        employeeId,
-        changedById: hrId,
-        oldSalary: previousAudit?.newSalary || 0,
-        newSalary: Number(salary),
+        organizationId,
+        entityType: 'SalaryAudit',
+        entityId: employeeId,
+        action: 'SALARY_CHANGE',
+        changes: { oldSalary: prevOldSalary, newSalary: Number(salary) },
+        createdBy: hrId,
       }
     });
-    
+
     return NextResponse.json({ salaryAudit });
   } catch (error) {
     console.error("Set salary error:", error);

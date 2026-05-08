@@ -4,13 +4,13 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {
-  Clock, Zap, Activity, ShieldCheck,
-  Camera, CheckCircle2, Target, Layers, Briefcase,
+  Clock, Activity, ShieldCheck,
+  Camera, CheckCircle2, Layers,
   MinusCircle, Bell, Search, TrendingUp, Calendar,
-  FileText, BarChart2, ChevronRight, AlertCircle, X,
-  ArrowUpRight, Users, ListChecks, Flame, Award, Focus,
-  TrendingDown, Eye, Zap as Lightning,
-  Megaphone, LogOut
+  FileText, BarChart2, ChevronRight, AlertCircle,
+  ArrowUpRight, ListChecks, Focus,
+  Eye, Zap as Lightning,
+  LogOut
 } from "lucide-react";
 import KanbanBoard from "./KanbanBoard";
 import { ChatWindow } from "../../components/ChatWindow";
@@ -21,7 +21,7 @@ import AttendanceModal from "../components/AttendanceModal";
 import { useRealTimeGlobal } from "../../../hooks/useRealTime";
 
 // ─── NAV TABS ────────────────────────────────────────────────────────────────
-const TABS = ["Dashboard", "Task Board", "Leave Requests", "Workbook"];
+const TABS = ["Dashboard", "Analytics", "Task Board", "Leave Requests", "Workbook"];
 
 // ─── STATUS COLORS ────────────────────────────────────────────────────────────
 const statusStyle: Record<string, string> = {
@@ -31,7 +31,7 @@ const statusStyle: Record<string, string> = {
 };
 
 // ─── CIRCULAR PROGRESS ────────────────────────────────────────────────────────
-function CircularProgress({ percentage, size = 80, strokeWidth = 4, color = "from-emerald-400 to-emerald-600", label }: any) {
+function CircularProgress({ percentage, size = 80, strokeWidth = 4, label }: any) {
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
@@ -77,49 +77,6 @@ function StatCard({ label, value, icon, accent = false, sub }: {
   );
 }
 
-// ─── BROADCAST CARD ────────────────────────────────────────────────────────────
-function BroadcastCard({ msg }: { msg: any }) {
-  return (
-    <div className="flex gap-3 p-4 rounded-xl border border-slate-100 hover:border-slate-200 transition-colors bg-white group">
-      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-        <Bell size={13} className="text-slate-500" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-slate-700 leading-relaxed">{msg.message}</p>
-        <p className="text-[10px] text-slate-400 mt-1 font-medium">{new Date(msg.createdAt).toLocaleString()}</p>
-      </div>
-    </div>
-  );
-}
-
-// ─── TASK ROW ────────────────────────────────────────────────────────────────
-const taskStatusStyle: Record<string, string> = {
-  TODO:        "bg-slate-100 text-slate-600",
-  IN_PROGRESS: "bg-blue-50 text-blue-700",
-  IN_REVIEW:   "bg-amber-50 text-amber-700",
-  DONE:        "bg-emerald-50 text-emerald-700",
-};
-
-function TaskRow({ task }: { task: any }) {
-  return (
-    <div className="flex items-center gap-4 px-5 py-3.5 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors group">
-      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${task.status === "DONE" ? "bg-emerald-400" : task.status === "IN_PROGRESS" ? "bg-blue-400" : task.status === "IN_REVIEW" ? "bg-amber-400" : "bg-slate-300"}`} />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-black truncate">{task.title}</p>
-        {task.description && <p className="text-xs text-slate-500 truncate mt-0.5">{task.description}</p>}
-      </div>
-      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg uppercase tracking-wide ${taskStatusStyle[task.status] || "bg-slate-100 text-slate-600"}`}>
-        {task.status?.replace("_", " ") || "TODO"}
-      </span>
-      {task.dueDate && (
-        <span className="text-[10px] text-slate-400 font-medium min-w-[72px] text-right">
-          {new Date(task.dueDate).toLocaleDateString()}
-        </span>
-      )}
-    </div>
-  );
-}
-
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
 export default function EmployeeAuraPortal() {
   const router = useRouter();
@@ -141,8 +98,8 @@ export default function EmployeeAuraPortal() {
   const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
   const [workbook, setWorkbook] = useState("");
   const [attendanceLoading, setAttendanceLoading] = useState(false);
-  const [attendanceError, setAttendanceError] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
+  const [taskSearch, setTaskSearch] = useState("");
 
   const handleLogout = async () => {
     try {
@@ -161,10 +118,6 @@ export default function EmployeeAuraPortal() {
   const handleCalendarDayClick = (dateStr: string) => {
     setLeaveSelectedDates({ start: dateStr });
     setLeaveModalOpen(true);
-  };
-
-  const handleTaskStatusChange = (taskId: string, newStatus: string) => {
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
   };
 
   useEffect(() => {
@@ -222,7 +175,7 @@ export default function EmployeeAuraPortal() {
         }),
       });
       if (res.ok) { setHasCheckedIn(true); setCheckInTime(new Date().toLocaleTimeString()); setIsCheckInOpen(false); }
-    } catch { setAttendanceError("Sync Failed"); } finally { setAttendanceLoading(false); }
+    } catch { } finally { setAttendanceLoading(false); }
   };
 
   const captureCheckOut = async (photoData?: string) => {
@@ -237,7 +190,7 @@ export default function EmployeeAuraPortal() {
         }),
       });
       if (res.ok) { setHasCheckedIn(false); setIsCheckOutOpen(false); }
-    } catch { setAttendanceError("Sync Failed"); } finally { setAttendanceLoading(false); }
+    } catch { } finally { setAttendanceLoading(false); }
   };
 
   const greet = () => {
@@ -248,6 +201,25 @@ export default function EmployeeAuraPortal() {
   const doneTasks     = tasks.filter(t => t.status === "DONE").length;
   const pendingTasks  = tasks.filter(t => t.status !== "DONE").length;
   const progressPct   = tasks.length ? Math.round((doneTasks / tasks.length) * 100) : 0;
+  const inProgressTasks = tasks.filter((t) => t.status === "IN_PROGRESS").length;
+  const inReviewTasks = tasks.filter((t) => t.status === "IN_REVIEW").length;
+  const pendingLeaves = myLeaveRequests.filter((l) => l.status === "PENDING").length;
+  const approvedLeaves = myLeaveRequests.filter((l) => l.status === "APPROVED").length;
+  const rejectedLeaves = myLeaveRequests.filter((l) => l.status === "REJECTED").length;
+  const completionQuality = tasks.length ? Math.round(((doneTasks + inReviewTasks * 0.5) / tasks.length) * 100) : 0;
+  const upcomingTasks = tasks
+    .filter((t) => t.dueDate)
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+    .slice(0, 5);
+
+  const filteredTasks = tasks.filter((task) => {
+    const q = taskSearch.toLowerCase();
+    return (
+      task.title?.toLowerCase().includes(q) ||
+      task.description?.toLowerCase().includes(q) ||
+      task.status?.toLowerCase().includes(q)
+    );
+  });
 
   if (loading) return (
     <div className="h-screen w-full flex items-center justify-center bg-white">
@@ -259,10 +231,10 @@ export default function EmployeeAuraPortal() {
   );
 
   return (
-    <div className="h-screen w-full bg-[#F8F9FB] text-black font-sans flex flex-col overflow-hidden">
+    <div className="h-screen w-full bg-gradient-to-br from-slate-100 via-white to-blue-50 text-black font-sans flex flex-col overflow-hidden">
 
       {/* ── HEADER ─────────────────────────────────────────────────────────── */}
-      <header className="flex-shrink-0 bg-white border-b border-slate-200 px-6 py-3 z-50">
+      <header className="flex-shrink-0 bg-white/90 backdrop-blur border-b border-slate-200 px-6 py-3 z-50">
         <div className="max-w-[1750px] mx-auto flex items-center justify-between">
 
           {/* Logo + Nav */}
@@ -318,8 +290,13 @@ export default function EmployeeAuraPortal() {
       </header>
 
       {/* ── MAIN CONTENT ────────────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-[1750px] mx-auto px-6 py-6 space-y-6">
+      <main className="flex-1 overflow-y-auto relative">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -top-12 -right-10 h-52 w-52 rounded-full bg-blue-200/35 blur-3xl" />
+          <div className="absolute top-56 -left-10 h-48 w-48 rounded-full bg-emerald-200/30 blur-3xl" />
+          <div className="absolute bottom-16 right-1/4 h-40 w-40 rounded-full bg-amber-200/20 blur-3xl" />
+        </div>
+        <div className="relative z-10 max-w-[1750px] mx-auto px-6 py-6 space-y-6">
 
           <AnimatePresence mode="wait">
 
@@ -329,14 +306,62 @@ export default function EmployeeAuraPortal() {
 
                 {/* Header Section */}
                 <motion.header initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} 
-                  className="px-2">
+                  className="px-2 rounded-2xl border border-slate-200/80 bg-white/85 backdrop-blur-sm p-5 shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
                     <ShieldCheck size={12} className="text-slate-400" />
                     <p className="text-[10px] font-bold tracking-widest text-slate-500 uppercase">Dashboard • {employee?.name}</p>
                   </div>
-                  <h1 className="text-4xl font-black tracking-tight text-black">{greet()}, <span className="text-slate-600">{employee?.name?.split(" ")[0] || "there"}</span></h1>
+                  <h1 className="text-2xl font-black tracking-tight text-black">{greet()}, <span className="text-slate-600">{employee?.name?.split(" ")[0] || "there"}</span></h1>
                   <p className="text-sm text-slate-500 mt-2">You have {pendingTasks} active task{pendingTasks !== 1 ? 's' : ''} • {myLeaveRequests.filter(l => l.status === "PENDING").length} leave request{myLeaveRequests.filter(l => l.status === "PENDING").length !== 1 ? 's' : ''} pending</p>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <span className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-[10px] font-semibold text-blue-700">Focus Score {completionQuality}%</span>
+                    <span className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[10px] font-semibold text-emerald-700">{doneTasks} Tasks Completed</span>
+                    <span className="px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-[10px] font-semibold text-amber-700">{pendingLeaves} Leaves Pending</span>
+                  </div>
                 </motion.header>
+
+                {/* Dashboard Snapshot */}
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.18 }}
+                  className="rounded-2xl border border-slate-200 bg-white p-6 hover:border-slate-300 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-black">Analytics Snapshot</h3>
+                      <p className="text-xs text-slate-500 mt-1">Your productivity, leave health, and delivery quality</p>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab("Analytics")}
+                      className="text-xs font-semibold text-slate-600 hover:text-black transition-colors"
+                    >
+                      Open analytics →
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-[10px] uppercase tracking-wide font-bold text-slate-500">Completion</p>
+                      <p className="text-2xl font-bold text-black mt-2">{progressPct}%</p>
+                      <p className="text-xs text-slate-500 mt-1">{doneTasks} of {tasks.length} tasks done</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-[10px] uppercase tracking-wide font-bold text-slate-500">Quality Index</p>
+                      <p className="text-2xl font-bold text-black mt-2">{completionQuality}%</p>
+                      <p className="text-xs text-slate-500 mt-1">Done + review weighted score</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-[10px] uppercase tracking-wide font-bold text-slate-500">Pending Leaves</p>
+                      <p className="text-2xl font-bold text-amber-600 mt-2">{pendingLeaves}</p>
+                      <p className="text-xs text-slate-500 mt-1">Awaiting manager approval</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-[10px] uppercase tracking-wide font-bold text-slate-500">Focus Queue</p>
+                      <p className="text-2xl font-bold text-black mt-2">{inProgressTasks}</p>
+                      <p className="text-xs text-slate-500 mt-1">Tasks currently in progress</p>
+                    </div>
+                  </div>
+                </motion.div>
 
                 {/* 3-Column Grid Layout */}
                 <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} 
@@ -344,7 +369,7 @@ export default function EmployeeAuraPortal() {
 
                   {/* Left Column - Announcements */}
                   <div className="col-span-12 md:col-span-6 lg:col-span-4">
-                    <div className="h-[310px] bg-white rounded-2xl border border-slate-200 p-6 flex flex-col hover:border-slate-300 hover:shadow-md transition-all">
+                    <div className="h-[310px] bg-gradient-to-b from-white to-slate-50/90 rounded-2xl border border-slate-200 p-6 flex flex-col hover:border-slate-300 hover:shadow-md transition-all">
                       <div className="flex items-center gap-2 mb-1">
                         <Bell size={16} className="text-slate-600" />
                         <h3 className="text-sm font-bold text-black">Announcements</h3>
@@ -370,28 +395,28 @@ export default function EmployeeAuraPortal() {
 
                   {/* Middle Column - Operational Status */}
                   <div className="col-span-12 md:col-span-6 lg:col-span-4">
-                    <div className="h-[310px] bg-white rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all flex flex-col justify-between">
+                    <div className="h-[310px] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 rounded-2xl border border-slate-700 p-6 hover:border-slate-500 hover:shadow-lg transition-all flex flex-col justify-between text-white">
                       <div>
-                        <h3 className="text-sm font-bold text-black mb-1">Operational Status</h3>
-                        <p className="text-xs text-slate-500 font-bold tracking-wider uppercase mb-4">Today</p>
+                        <h3 className="text-sm font-bold text-white mb-1">Operational Status</h3>
+                        <p className="text-xs text-slate-300 font-bold tracking-wider uppercase mb-4">Today</p>
                         {/* Biometric */}
                         <div className="flex items-center gap-3 mb-4">
                           <div className={`w-3 h-3 rounded-full flex-shrink-0 ${hasCheckedIn ? "bg-emerald-400 shadow-sm shadow-emerald-400/60" : "bg-amber-400 animate-pulse"}`} />
                           <div>
-                            <p className="text-base font-bold text-black">{hasCheckedIn ? "Checked In" : "Not Checked In"}</p>
-                            {hasCheckedIn && checkInTime && <p className="text-[10px] text-slate-400">Since {checkInTime}</p>}
+                            <p className="text-base font-bold text-white">{hasCheckedIn ? "Checked In" : "Not Checked In"}</p>
+                            {hasCheckedIn && checkInTime && <p className="text-[10px] text-slate-300">Since {checkInTime}</p>}
                           </div>
                         </div>
-                        <div className="h-px bg-slate-100 mb-4" />
+                        <div className="h-px bg-white/10 mb-4" />
                         {/* Mini stats */}
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Leave Bal.</p>
-                            <p className="text-lg font-bold text-black mt-1">12 Days</p>
+                          <div className="p-3 bg-white/10 rounded-xl border border-white/15 text-center">
+                            <p className="text-[9px] font-bold text-slate-300 uppercase tracking-wide">Leave Bal.</p>
+                            <p className="text-lg font-bold text-white mt-1">12 Days</p>
                           </div>
-                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Work Week</p>
-                            <p className="text-lg font-bold text-black mt-1">48.2h</p>
+                          <div className="p-3 bg-white/10 rounded-xl border border-white/15 text-center">
+                            <p className="text-[9px] font-bold text-slate-300 uppercase tracking-wide">Work Week</p>
+                            <p className="text-lg font-bold text-white mt-1">48.2h</p>
                           </div>
                         </div>
                       </div>
@@ -401,13 +426,13 @@ export default function EmployeeAuraPortal() {
                           onClick={() => setIsCheckInOpen(true)}
                           disabled={hasCheckedIn || attendanceLoading}
                           className={`flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all
-                            ${hasCheckedIn ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-black text-white hover:bg-slate-900"}`}>
+                            ${hasCheckedIn ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30" : "bg-white text-slate-900 hover:bg-slate-100"}`}>
                           <Camera size={13} /> {hasCheckedIn ? "✓ Checked In" : "Check In"}
                         </motion.button>
                         <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                           onClick={() => setIsCheckOutOpen(true)}
                           disabled={!hasCheckedIn || attendanceLoading}
-                          className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-slate-200 text-slate-600 bg-white hover:bg-slate-50 flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                          className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-white/20 text-white bg-white/10 hover:bg-white/20 flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                           <Clock size={13} /> Check Out
                         </motion.button>
                       </div>
@@ -416,7 +441,7 @@ export default function EmployeeAuraPortal() {
 
                   {/* Right Column - Calendar */}
                   <div className="col-span-12 lg:col-span-4">
-                    <div className="h-[310px] bg-white rounded-2xl border border-slate-200 p-6 flex flex-col hover:border-slate-300 hover:shadow-md transition-all overflow-hidden">
+                    <div className="h-[310px] bg-gradient-to-b from-white to-blue-50/70 rounded-2xl border border-slate-200 p-6 flex flex-col hover:border-slate-300 hover:shadow-md transition-all overflow-hidden">
                       <div className="flex items-center gap-2 mb-4">
                         <Calendar size={16} className="text-slate-600" />
                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Leave Calendar</h3>
@@ -434,7 +459,7 @@ export default function EmployeeAuraPortal() {
 
                   {/* Performance Metrics */}
                   <div className="col-span-12 md:col-span-6 lg:col-span-4">
-                    <div className="bg-white rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all">
+                    <div className="bg-gradient-to-b from-white to-emerald-50/40 rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all">
                       <h3 className="text-sm font-bold text-black mb-1">Performance</h3>
                       <p className="text-xs text-slate-500 font-bold tracking-wider uppercase mb-6">This Week</p>
                       <div className="space-y-6">
@@ -484,7 +509,7 @@ export default function EmployeeAuraPortal() {
 
                   {/* Recent Activity */}
                   <div className="col-span-12 md:col-span-6 lg:col-span-4">
-                    <div className="bg-white rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all">
+                    <div className="bg-gradient-to-b from-white to-slate-50/80 rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all">
                       <h3 className="text-sm font-bold text-black mb-1">Recent Activity</h3>
                       <p className="text-xs text-slate-500 font-bold tracking-wider uppercase mb-4">Last 7 Days</p>
                       <div className="space-y-2 max-h-[280px] overflow-y-auto">
@@ -532,7 +557,7 @@ export default function EmployeeAuraPortal() {
 
                   {/* Quick Actions */}
                   <div className="col-span-12 lg:col-span-4">
-                    <div className="bg-white rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all">
+                    <div className="bg-gradient-to-b from-white to-indigo-50/40 rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all">
                       <h3 className="text-sm font-bold text-black mb-1">Quick Actions</h3>
                       <p className="text-xs text-slate-500 font-bold tracking-wider uppercase mb-4">Common Tasks</p>
                       <div className="space-y-2">
@@ -574,7 +599,7 @@ export default function EmployeeAuraPortal() {
 
                   {/* Team Members */}
                   <div className="col-span-12 md:col-span-6 lg:col-span-4">
-                    <div className="bg-white rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all">
+                    <div className="bg-gradient-to-b from-white to-slate-50/70 rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all">
                       <h3 className="text-sm font-bold text-black mb-1">Team Overview</h3>
                       <p className="text-xs text-slate-500 font-bold tracking-wider uppercase mb-4">Total Members</p>
                       <div className="mb-6">
@@ -611,7 +636,7 @@ export default function EmployeeAuraPortal() {
 
                   {/* Upcoming Deadlines */}
                   <div className="col-span-12 md:col-span-6 lg:col-span-4">
-                    <div className="bg-white rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all">
+                    <div className="bg-gradient-to-b from-white to-amber-50/40 rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all">
                       <h3 className="text-sm font-bold text-black mb-1">Upcoming Deadlines</h3>
                       <p className="text-xs text-slate-500 font-bold tracking-wider uppercase mb-4">Next 7 Days</p>
                       <div className="space-y-2">
@@ -643,7 +668,7 @@ export default function EmployeeAuraPortal() {
 
                   {/* Weekly Summary */}
                   <div className="col-span-12 lg:col-span-4">
-                    <div className="bg-white rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all">
+                    <div className="bg-gradient-to-b from-white to-sky-50/40 rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all">
                       <h3 className="text-sm font-bold text-black mb-1">Weekly Summary</h3>
                       <p className="text-xs text-slate-500 font-bold tracking-wider uppercase mb-4">This Week</p>
                       <div className="space-y-4">
@@ -678,6 +703,97 @@ export default function EmployeeAuraPortal() {
                 </motion.div>
                       
                     
+              </motion.div>
+            )}
+
+            {/* ── ANALYTICS TAB ─────────────────────────────────────── */}
+            {activeTab === "Analytics" && (
+              <motion.div key="analytics" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-black">📊 Personal Analytics</h2>
+                    <p className="text-sm text-slate-500 mt-1">A focused view of your execution and workload</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <StatCard label="Task Completion" value={`${progressPct}%`} icon={<CheckCircle2 size={15} />} sub={`${doneTasks}/${tasks.length} completed`} />
+                  <StatCard label="In Progress" value={inProgressTasks} icon={<Lightning size={15} />} sub="Active focus items" />
+                  <StatCard label="In Review" value={inReviewTasks} icon={<Eye size={15} />} sub="Awaiting feedback" />
+                  <StatCard label="Leave Pending" value={pendingLeaves} icon={<Clock size={15} />} sub="Needs manager action" accent={pendingLeaves === 0} />
+                </div>
+
+                <div className="grid grid-cols-12 gap-6">
+                  <div className="col-span-12 lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all">
+                    <h3 className="text-sm font-bold text-black mb-1">Task Status Distribution</h3>
+                    <p className="text-xs text-slate-500 font-bold tracking-wider uppercase mb-5">Live workload balance</p>
+                    {[
+                      { label: "To Do", value: tasks.filter((t) => t.status === "TODO").length, color: "bg-slate-500" },
+                      { label: "In Progress", value: inProgressTasks, color: "bg-blue-600" },
+                      { label: "In Review", value: inReviewTasks, color: "bg-amber-500" },
+                      { label: "Done", value: doneTasks, color: "bg-emerald-600" },
+                    ].map((item) => {
+                      const total = Math.max(tasks.length, 1);
+                      const width = Math.max(Math.round((item.value / total) * 100), item.value > 0 ? 4 : 0);
+                      return (
+                        <div key={item.label} className="mb-4 last:mb-0">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-xs text-slate-700 font-medium">{item.label}</span>
+                            <span className="text-xs font-bold text-black">{item.value}</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                            <div className={`${item.color} h-full rounded-full`} style={{ width: `${width}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="col-span-12 lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all">
+                    <h3 className="text-sm font-bold text-black mb-1">Leave Health</h3>
+                    <p className="text-xs text-slate-500 font-bold tracking-wider uppercase mb-5">Request outcomes</p>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-3 rounded-lg border border-emerald-200 bg-emerald-50">
+                        <span className="text-xs font-medium text-emerald-700">Approved</span>
+                        <span className="text-sm font-bold text-emerald-700">{approvedLeaves}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-lg border border-amber-200 bg-amber-50">
+                        <span className="text-xs font-medium text-amber-700">Pending</span>
+                        <span className="text-sm font-bold text-amber-700">{pendingLeaves}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-lg border border-red-200 bg-red-50">
+                        <span className="text-xs font-medium text-red-700">Rejected</span>
+                        <span className="text-sm font-bold text-red-700">{rejectedLeaves}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 p-6 hover:border-slate-300 hover:shadow-md transition-all">
+                  <h3 className="text-sm font-bold text-black mb-1">Upcoming Deadlines Radar</h3>
+                  <p className="text-xs text-slate-500 font-bold tracking-wider uppercase mb-4">Sorted by nearest due date</p>
+                  {upcomingTasks.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 text-xs">No due dates assigned yet.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {upcomingTasks.map((task) => {
+                        const days = Math.ceil((new Date(task.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                        const isUrgent = days <= 1;
+                        return (
+                          <div key={task.id} className={`p-3 rounded-lg border flex items-center justify-between ${isUrgent ? "border-red-200 bg-red-50" : "border-slate-200 bg-slate-50"}`}>
+                            <div>
+                              <p className="text-sm font-semibold text-black">{task.title}</p>
+                              <p className="text-xs text-slate-500">{task.status?.replace("_", " ") || "TODO"}</p>
+                            </div>
+                            <p className={`text-xs font-bold ${isUrgent ? "text-red-600" : "text-slate-600"}`}>
+                              {days <= 0 ? "Today" : days === 1 ? "Tomorrow" : `In ${days} days`}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </motion.div>
             )}
 
@@ -821,11 +937,22 @@ export default function EmployeeAuraPortal() {
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div>
                     <h2 className="text-2xl font-bold text-black">📌 Task Board</h2>
-                    <p className="text-sm text-slate-500 mt-1">Drag tasks between columns to update status · {tasks.length} total tasks</p>
+                    <p className="text-sm text-slate-500 mt-1">Drag tasks between columns to update status · {filteredTasks.length} shown / {tasks.length} total</p>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200 p-4">
+                  <div className="relative max-w-md">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={taskSearch}
+                      onChange={(e) => setTaskSearch(e.target.value)}
+                      placeholder="Filter by task title, description, or status..."
+                      className="w-full pl-8 pr-4 py-2 text-sm border rounded-xl outline-none bg-slate-50 border-slate-200 text-black placeholder:text-slate-400 focus:border-slate-400"
+                    />
                   </div>
                 </div>
                 <div className="bg-white rounded-2xl border border-slate-200 p-6">
-                  <KanbanBoard initialTasks={tasks} isManagerView={false} />
+                  <KanbanBoard initialTasks={filteredTasks} isManagerView={false} />
                 </div>
               </motion.div>
             )}

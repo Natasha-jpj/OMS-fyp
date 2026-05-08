@@ -8,10 +8,9 @@ import {
   ChevronRight, X, Send, Activity, ShieldCheck, Layers,
   Calendar as CalendarIcon, AlertCircle, CheckCircle, Play, Square, Briefcase,
   Target, ArrowUpRight, Landmark, BarChart2, ListChecks, Calendar, Building2,
-  UserPlus, Settings, Bell, FileText, PieChart, TrendingDown, Award, MoreHorizontal,
+  Settings, Bell, FileText, PieChart, TrendingDown, Award, MoreHorizontal,
   Briefcase as BriefcaseIcon, DollarSign, LayoutDashboard, UserCheck, MinusCircle, ArrowDownCircle, LogOut
 } from "lucide-react";
-import { ManagerHireModal } from "./ManagerHireModal";
 import { NewDirectiveModal } from "./NewDirectiveModal";
 import { NewProjectModal } from "./NewProjectModal";
 import { useRealTimeGlobal } from "../../../hooks/useRealTime";
@@ -157,6 +156,7 @@ export default function ManagerFullDashboard({ allEmployees = [] }: any) {
   const router = useRouter();
   const NAV = [
     { id: "Dashboard", icon: LayoutDashboard },
+    { id: "Analytics", icon: PieChart },
     { id: "Team", icon: Users },
     { id: "Operations", icon: Layers },
     { id: "Leave Requests", icon: Calendar },
@@ -179,7 +179,7 @@ export default function ManagerFullDashboard({ allEmployees = [] }: any) {
   const [leaveSelectedDates, setLeaveSelectedDates] = useState<{ start: string; end?: string }>({ start: "" });
   const [selectedEmployee, setSelectedEmployee] = useState("");
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
-  const [isHireModalOpen, setIsHireModalOpen] = useState(false);
+  const [teamSearch, setTeamSearch] = useState("");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
@@ -343,6 +343,21 @@ export default function ManagerFullDashboard({ allEmployees = [] }: any) {
     return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
   };
 
+  const today = new Date().toDateString();
+  const checkedInToday = attendanceRecords.filter((r) => r.type === "CHECKIN" && new Date(r.timestamp).toDateString() === today).length;
+  const attendanceRate = employees.length ? Math.round((checkedInToday / employees.length) * 100) : 0;
+  const taskCompletionRate = tasks.length ? Math.round((tasks.filter((t) => t.status === "DONE").length / tasks.length) * 100) : 0;
+  const projectCompletionRate = projects.length ? Math.round((projects.filter((p) => p.status === "COMPLETED").length / projects.length) * 100) : 0;
+  const leavePending = leaveRequests.filter((l) => l.status === "PENDING").length;
+  const filteredTeam = employees.filter((e) => {
+    const q = teamSearch.toLowerCase();
+    return (
+      e.name?.toLowerCase().includes(q) ||
+      (e.role || "").toLowerCase().includes(q) ||
+      (e.position || "").toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="h-screen w-full flex overflow-hidden bg-white">
 
@@ -379,7 +394,7 @@ export default function ManagerFullDashboard({ allEmployees = [] }: any) {
             <p className="text-[9px] font-bold uppercase tracking-widest px-3 py-1 text-slate-600">Quick Actions</p>
             {[
               { label: "New Task", icon: <BriefcaseIcon size={14} />, fn: () => setIsTaskModalOpen(true) },
-              { label: "Hire Staff", icon: <UserPlus size={14} />, fn: () => setIsHireModalOpen(true) },
+              { label: "Team Overview", icon: <Users size={14} />, fn: () => setActiveTab("Team") },
               { label: "New Project", icon: <Plus size={14} />, fn: () => setIsProjectModalOpen(true) },
             ].map(a => (
               <button key={a.label} onClick={a.fn}
@@ -471,7 +486,41 @@ export default function ManagerFullDashboard({ allEmployees = [] }: any) {
                   <StatCard label="Team Size" value={employees.length} sub="Department members" icon={<Users size={15} />} trend="+2 this month" />
                   <StatCard label="Active Projects" value={projects.length} sub="In progress" icon={<Briefcase size={15} />} trend="3 due this week" />
                   <StatCard label="Pending Tasks" value={tasks.filter(t => t.status !== "DONE").length} sub="Awaiting completion" icon={<ListChecks size={15} />} trend="Attention needed" trendUp={false} />
-                  <StatCard label="Team Attendance" value="92%" sub="Present today" icon={<Activity size={15} />} gold trend="Up from yesterday" />
+                  <StatCard label="Team Attendance" value={`${attendanceRate}%`} sub="Present today" icon={<Activity size={15} />} gold trend="Live attendance" />
+                </div>
+
+                <div className="rounded-2xl border p-5 bg-slate-50 border-slate-200 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-black">Performance Snapshot</h3>
+                      <p className="text-xs text-slate-600 mt-0.5">Manager intelligence for tasks, projects, and attendance</p>
+                    </div>
+                    <button onClick={() => setActiveTab("Analytics")} className="text-xs font-medium text-slate-700 hover:text-black transition-colors">
+                      Open analytics →
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Task Completion</p>
+                      <p className="mt-2 text-2xl font-bold text-black">{taskCompletionRate}%</p>
+                      <p className="text-xs text-slate-500 mt-1">Completed vs total tasks</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Project Completion</p>
+                      <p className="mt-2 text-2xl font-bold text-black">{projectCompletionRate}%</p>
+                      <p className="text-xs text-slate-500 mt-1">Projects marked completed</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Pending Leaves</p>
+                      <p className="mt-2 text-2xl font-bold text-amber-600">{leavePending}</p>
+                      <p className="text-xs text-slate-500 mt-1">Requests awaiting action</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Checked In Today</p>
+                      <p className="mt-2 text-2xl font-bold text-black">{checkedInToday}</p>
+                      <p className="text-xs text-slate-500 mt-1">From {employees.length} team members</p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Main grid */}
@@ -547,6 +596,73 @@ export default function ManagerFullDashboard({ allEmployees = [] }: any) {
               </motion.div>
             )}
 
+            {/* ── ANALYTICS ───────────────────────────────────────── */}
+            {activeTab === "Analytics" && (
+              <motion.div key="analytics" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-black">Team Analytics</h2>
+                    <p className="text-sm mt-0.5 text-slate-700">Operational insights for manager decisions</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <StatCard label="Task Completion" value={`${taskCompletionRate}%`} sub={`${tasks.filter((t) => t.status === "DONE").length}/${tasks.length} done`} icon={<ListChecks size={15} />} />
+                  <StatCard label="Project Completion" value={`${projectCompletionRate}%`} sub={`${projects.filter((p) => p.status === "COMPLETED").length}/${projects.length} closed`} icon={<Target size={15} />} />
+                  <StatCard label="Attendance Rate" value={`${attendanceRate}%`} sub={`${checkedInToday}/${employees.length} checked in`} icon={<Activity size={15} />} />
+                  <StatCard label="Leave Pending" value={leavePending} sub="Needs review" icon={<Clock size={15} />} trendUp={false} trend={leavePending > 3 ? "Action required" : "Under control"} />
+                </div>
+
+                <div className="grid grid-cols-12 gap-4">
+                  <div className="col-span-12 lg:col-span-6 rounded-2xl border p-5 bg-slate-50 border-slate-200">
+                    <h3 className="text-sm font-semibold text-black mb-3">Task Status Breakdown</h3>
+                    {[
+                      { label: "To Do", value: tasks.filter((t) => t.status === "TODO").length, color: "bg-slate-500" },
+                      { label: "In Progress", value: tasks.filter((t) => t.status === "IN_PROGRESS").length, color: "bg-blue-600" },
+                      { label: "Done", value: tasks.filter((t) => t.status === "DONE").length, color: "bg-emerald-600" },
+                    ].map((item) => {
+                      const max = Math.max(tasks.length, 1);
+                      const pct = Math.max(Math.round((item.value / max) * 100), item.value > 0 ? 4 : 0);
+                      return (
+                        <div key={item.label} className="mb-3 last:mb-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-slate-700">{item.label}</span>
+                            <span className="text-xs font-semibold text-black">{item.value}</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                            <div className={`h-full rounded-full ${item.color}`} style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="col-span-12 lg:col-span-6 rounded-2xl border p-5 bg-slate-50 border-slate-200">
+                    <h3 className="text-sm font-semibold text-black mb-3">Project Status Breakdown</h3>
+                    {[
+                      { label: "Planning", value: projects.filter((p) => p.status === "PLANNING").length, color: "bg-indigo-600" },
+                      { label: "In Progress", value: projects.filter((p) => p.status === "IN_PROGRESS").length, color: "bg-amber-500" },
+                      { label: "Completed", value: projects.filter((p) => p.status === "COMPLETED").length, color: "bg-emerald-600" },
+                    ].map((item) => {
+                      const max = Math.max(projects.length, 1);
+                      const pct = Math.max(Math.round((item.value / max) * 100), item.value > 0 ? 4 : 0);
+                      return (
+                        <div key={item.label} className="mb-3 last:mb-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-slate-700">{item.label}</span>
+                            <span className="text-xs font-semibold text-black">{item.value}</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                            <div className={`h-full rounded-full ${item.color}`} style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
             {/* ── TEAM ────────────────────────────────────────────── */}
             {activeTab === "Team" && (
               <motion.div key="team" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
@@ -555,19 +671,31 @@ export default function ManagerFullDashboard({ allEmployees = [] }: any) {
                     <h2 className="text-2xl font-bold text-black">Team</h2>
                     <p className="text-sm mt-0.5 text-slate-700">{employees.length} team members</p>
                   </div>
-                  <button onClick={() => setIsHireModalOpen(true)}
+                  <button onClick={() => setActiveTab("Analytics")}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors bg-black text-white hover:bg-slate-900">
-                    <UserPlus size={14} /> Hire Staff
+                    <PieChart size={14} /> Team Analytics
                   </button>
+                </div>
+                <div className="rounded-2xl border p-4 bg-slate-50 border-slate-200">
+                  <div className="relative max-w-md">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      value={teamSearch}
+                      onChange={(e) => setTeamSearch(e.target.value)}
+                      placeholder="Search team by name, role, or position..."
+                      className="w-full pl-8 pr-4 py-2 text-sm border rounded-xl outline-none bg-white border-slate-300 text-black placeholder:text-slate-500 focus:border-blue-900 transition-colors"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-600 mt-2">{filteredTeam.length} result(s)</p>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <StatCard label="Team Size" value={employees.length} icon={<Users size={15} />} />
-                  <StatCard label="Present Today" value={Math.floor(employees.length * 0.92)} icon={<Activity size={15} />} sub="92% attendance" />
+                  <StatCard label="Present Today" value={checkedInToday} icon={<Activity size={15} />} sub={`${attendanceRate}% attendance`} />
                   <StatCard label="On Leave" value={leaveRequests.filter(l => l.status === "APPROVED").length} icon={<Calendar size={15} />} />
                 </div>
                 <div className="rounded-2xl border overflow-hidden bg-slate-50 border-slate-200">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
-                    {employees.map(emp => (
+                    {filteredTeam.map(emp => (
                       <div key={emp.id} className="p-4 rounded-xl border bg-slate-150 border-slate-300 hover:border-slate-400 transition-colors">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
@@ -584,6 +712,9 @@ export default function ManagerFullDashboard({ allEmployees = [] }: any) {
                         </div>
                       </div>
                     ))}
+                    {filteredTeam.length === 0 && (
+                      <div className="col-span-full text-center text-sm text-slate-500 py-8">No team members match your search.</div>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -795,7 +926,6 @@ export default function ManagerFullDashboard({ allEmployees = [] }: any) {
 
       {/* ── MODALS ──────────────────────────────────────────────────────── */}
       <NewDirectiveModal isOpen={isTaskModalOpen} onClose={() => setIsTaskModalOpen(false)} employees={employees} manager={manager} />
-      <ManagerHireModal isOpen={isHireModalOpen} onClose={() => setIsHireModalOpen(false)} manager={manager} />
       <NewProjectModal isOpen={isProjectModalOpen} onClose={() => setIsProjectModalOpen(false)} departmentId={manager?.departmentId} />
       
       {/* Leave Request Modal */}

@@ -14,6 +14,7 @@ import {
   Upload,
   Loader,
 } from "lucide-react";
+import EmployeePayrollPanel from "../employee/components/EmployeePayrollPanel";
 
 interface Employee {
   id: string;
@@ -380,6 +381,17 @@ export function EmployeeDetailModal({
                         )}
                       </div>
                     </section>
+                      {/* Payroll section */}
+                      <section>
+                        <SectionLabel>Payroll</SectionLabel>
+                        <div>
+                          {/* Lazy client component shows recent payslips and quick links */}
+                          {/* EmployeePayrollPanel fetches /api/payroll/employee/[id]/records */}
+                          <React.Suspense fallback={<div className="text-sm text-slate-500">Loading payroll...</div>}>
+                            <EmployeePayrollPanel employeeId={employee.id} />
+                          </React.Suspense>
+                        </div>
+                      </section>
                   </>
                 ) : (
                   <>
@@ -562,7 +574,7 @@ export function EmployeeDetailModal({
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white">
               <span className="text-[15px] font-semibold text-slate-900">
-                {employee.name}'s Contract
+                {employee.name}&apos;s Contract
               </span>
               <div className="flex items-center gap-2">
                 <a

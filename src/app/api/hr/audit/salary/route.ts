@@ -5,7 +5,6 @@ import jwt from "jsonwebtoken";
 
 // GET: Fetch salary audit logs (optionally filter by employeeId, changedById, date range)
 export async function GET(req: NextRequest) {
-  
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get('token')?.value;
@@ -27,21 +26,21 @@ export async function GET(req: NextRequest) {
     const start = searchParams.get('start');
     const end = searchParams.get('end');
 
-    const where: any = {};
-    if (employeeId) where.employeeId = employeeId;
-    if (changedById) where.changedById = changedById;
+    // Use payrollAuditLog as a generic audit table to store salary changes
+    const where: any = {
+      entityType: 'SalaryAudit',
+      ...(employeeId ? { entityId: employeeId } : {}),
+      ...(changedById ? { createdBy: changedById } : {}),
+    };
+
     if (start || end) {
       where.createdAt = {};
       if (start) where.createdAt.gte = new Date(start);
       if (end) where.createdAt.lte = new Date(end);
     }
 
-    const audits = await prisma.salaryAudit.findMany({
+    const audits = await prisma.payrollAuditLog.findMany({
       where,
-      include: {
-        employee: { select: { id: true, name: true, email: true } },
-        changedBy: { select: { id: true, name: true, email: true } },
-      },
       orderBy: { createdAt: 'desc' },
     });
     return NextResponse.json({ audits });
@@ -73,8 +72,21 @@ export async function POST(req: NextRequest) {
     if (!employeeId || oldSalary == null || newSalary == null) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
-    const audit = await prisma.salaryAudit.create({
-      data: { employeeId, oldSalary, newSalary, changedById: hrId, reason },
+
+    // Resolve organizationId from HR profile if available
+    const hr = await prisma.hR.findUnique({ where: { id: hrId } });
+    const organizationId = hr?.organization || "";
+
+    const audit = await prisma.payrollAuditLog.create({
+      data: {
+        organizationId,
+        entityType: 'SalaryAudit',
+        entityId: employeeId,
+        action: 'SALARY_CHANGE',
+        changes: { oldSalary, newSalary },
+        reason: reason || null,
+        createdBy: hrId,
+      },
     });
     return NextResponse.json({ audit });
   } catch (error: any) {

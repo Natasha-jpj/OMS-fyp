@@ -22,7 +22,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
-    const { name, email, password, deptId, role } = await req.json();
+    const body = await req.json();
+    const { name, email, password, deptId, role, salary } = body;
     
     if (!name || !email || !password) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -51,6 +52,24 @@ export async function POST(req: Request) {
         role: role || "EMPLOYEE",
       }
     });
+    // Attempt to create a default salary structure so new employees are payroll-ready.
+    try {
+      const hrRecord = await prisma.hR.findUnique({ where: { id: hrId } });
+      const organizationId = hrRecord?.organization || hrId;
+      const basicSalary = Number(salary) || 13500;
+      await prisma.salaryStructure.create({
+        data: {
+          organizationId,
+          employeeId: newEmployee.id,
+          basicSalary: basicSalary,
+          allowances: {},
+          effectiveFromDate: new Date(),
+        },
+      });
+    } catch (e) {
+      // Non-fatal: log and continue. Employee was created successfully.
+      console.warn("Failed to auto-create salary structure:", e?.message || e);
+    }
 
     return NextResponse.json(newEmployee);
   } catch (error: any) {

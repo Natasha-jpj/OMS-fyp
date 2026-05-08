@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { Activity } from "lucide-react";
 import AuraFlowSuperAdmin from "./AuraFlowSuperAdmin";
 
 export default function DashboardPage() {
@@ -45,7 +46,14 @@ export default function DashboardPage() {
     fetchData();
   }, []);
 
-  if (loading) return <div className="p-8 text-white">Loading...</div>;
+  if (loading) return (
+    <div className="h-screen w-full flex items-center justify-center bg-white">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center animate-pulse"><Activity size={18} className="text-white" /></div>
+        <p className="text-xs text-slate-500 font-medium">Loading your workspace…</p>
+      </div>
+    </div>
+  );
 
   return (
     <AuraFlowSuperAdmin
