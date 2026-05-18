@@ -212,3 +212,53 @@ export async function sendLeaveRejectionEmail(
     return false;
   }
 }
+
+// ─── SEND NEW USER CREDENTIALS EMAIL ─────────────────────────
+export async function sendNewUserCredentials(
+  employeeName: string,
+  employeeEmail: string,
+  username: string,
+  password: string
+) {
+  try {
+    const transport = getTransporter();
+
+    const mailOptions = {
+      from: `${process.env.MAIL_FROM_NAME} <${process.env.MAIL_FROM}>`,
+      to: employeeEmail,
+      subject: `Welcome to ${process.env.MAIL_FROM_NAME || 'AuraFlow'} — Your Account Credentials`,
+      html: `
+        <div style="font-family: Arial; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+          <div style="background: linear-gradient(135deg, #000 0%, #1a1a1a 100%); padding: 30px; border-radius: 12px; color: white; text-align: center;">
+            <h1 style="margin: 0; font-size: 24px;">Welcome to ${process.env.MAIL_FROM_NAME || 'AuraFlow'}</h1>
+            <p style="margin: 10px 0 0 0; opacity: 0.9;">Your account has been created by HR.</p>
+          </div>
+
+          <div style="background: #f8f8f8; padding: 20px; margin: 20px 0; border-radius: 12px;">
+            <p style="margin: 0 0 10px 0; color: #666;">Hello <strong>${employeeName}</strong>,</p>
+            <p style="margin: 0 0 10px 0; color: #666;">An account has been created for you. Use the credentials below to sign in and complete your profile.</p>
+
+            <div style="margin-top: 16px; padding: 12px; background: white; border: 1px solid #e6e6e6; border-radius: 8px;">
+              <p style="margin: 0 0 6px 0; color: #444;"><strong>Username:</strong> ${username}</p>
+              <p style="margin: 0; color: #444;"><strong>Password:</strong> ${password}</p>
+            </div>
+
+            <p style="margin: 16px 0 0 0; color: #666;">For security, please change your password after your first login.</p>
+            <p style="margin: 8px 0 0 0; color: #666;">If you did not expect this email, contact your HR administrator.</p>
+          </div>
+
+          <div style="text-align: center; padding: 12px 0; border-top: 1px solid #e0e0e0; color: #999; font-size: 12px;">
+            <p>This is an automated email from ${process.env.MAIL_FROM_NAME || 'AuraFlow'} HR System.</p>
+          </div>
+        </div>
+      `,
+    };
+
+    const info = await transport.sendMail(mailOptions);
+    console.log("New user credentials email sent:", info.messageId);
+    return true;
+  } catch (error) {
+    console.error("Failed to send new user credentials email:", error);
+    return false;
+  }
+}

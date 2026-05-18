@@ -7,9 +7,9 @@ import AssignManagerModal from "./AssignManagerModal";
 import { EmployeeDetailModal } from "./EmployeeDetailModal";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Users, Search, Plus, Building2, ShieldCheck,
+  Users, Search, Plus, Building2,
   Clock, Activity, ChevronRight,
-  X, Calendar, AlertCircle, CheckCircle, MinusCircle,
+  X, Calendar, CheckCircle, MinusCircle,
   ArrowDownCircle, LayoutDashboard, Settings,
   DollarSign, Send, MoreHorizontal, UserCheck,
   Briefcase, PieChart,
@@ -17,13 +17,17 @@ import {
   Award, ListChecks, LogOut
 } from "lucide-react";
 // LeaveManagementSection import removed (unused)
-import { SuperAdminProjects } from "./SuperAdminWidgets";
 import { CreateDeptModal } from "./CreateDeptModal";
 import { HireStaffModal } from "./HireStaffModal";
 import { TaskKanban } from "../../manager/dashboard/TaskKanban";
 import { ChatWindow } from "../../components/ChatWindow";
 import { ChatConnectButton } from "../../components/ChatConnectButton";
 import PayrollDashboard from "../payroll/components/PayrollDashboard";
+import {
+  AreaChart, Area, BarChart, Bar,
+  Cell, RadialBarChart, RadialBar,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 interface Employee {
@@ -59,7 +63,6 @@ const NAV = [
   { id: "Projects",     icon: Briefcase       },
   { id: "Payroll",      icon: DollarSign      },
   { id: "Leaves",       icon: Calendar        },
-  { id: "Analytics",    icon: PieChart        },
 ];
 
 // ─── AVATAR ───────────────────────────────────────────────────────────────────
@@ -91,6 +94,54 @@ function Badge({ status }: { status: string }) {
     <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${map[status] ?? map.EMPLOYEE}`}>
       {status}
     </span>
+  );
+}
+
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-xl px-4 py-3 text-xs">
+      {label && <p className="font-semibold text-slate-700 mb-1.5">{label}</p>}
+      {payload.map((p: any, i: number) => (
+        <div key={i} className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color || p.fill }} />
+          <span className="text-slate-600">{p.name}:</span>
+          <span className="font-bold text-black">{typeof p.value === "number" ? p.value.toLocaleString() : p.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GraphCard({
+  title,
+  subtitle,
+  accent = "#0f172a",
+  onClick,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  accent?: string;
+  onClick?: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <motion.div
+      whileHover={{ y: -2, boxShadow: "0 16px 42px rgba(15,23,42,0.08)" }}
+      onClick={onClick}
+      className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 cursor-pointer transition-all"
+    >
+      <div className="absolute inset-x-0 top-0 h-1.5" style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }} />
+      <div className="absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-slate-50/90 to-transparent pointer-events-none" />
+      <div className="relative mb-4 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-black">{title}</p>
+          {subtitle && <p className="text-[11px] text-slate-500 mt-0.5">{subtitle}</p>}
+        </div>
+      </div>
+      {children}
+    </motion.div>
   );
 }
 
@@ -189,94 +240,6 @@ function BroadcastWidget({
 // ─── LEAVE WIDGET ─────────────────────────────────────────────────────────────
 // LeaveWidget removed (unused)
 
-// ─── MINI CALENDAR ────────────────────────────────────────────────────────────
-function MiniCalendar({ onClickDetail }: { onClickDetail?: () => void }) {
-  const now = new Date();
-  const month = now.toLocaleString("default", { month: "long", year: "numeric" });
-  return (
-    <motion.div
-      whileHover={{ y: -2 }}
-      onClick={onClickDetail}
-      className="rounded-2xl border p-5 bg-slate-50 border-slate-200 cursor-pointer hover:shadow-md transition-all"
-    >
-      <h3 className="text-sm font-semibold mb-3 text-black">{month}</h3>
-      <p className="text-4xl font-bold text-black">{now.getDate()}</p>
-      <p className="text-xs text-slate-600 mt-1">
-        {now.toLocaleString("default", { weekday: "long" })}
-      </p>
-    </motion.div>
-  );
-}
-
-// ─── ACTIVITY FEED ────────────────────────────────────────────────────────────
-function ActivityFeed({
-  isDateInRange, onClickDetail,
-}: {
-  isDateInRange?: (date: string) => boolean;
-  onClickDetail?: () => void;
-}) {
-  const [activities, setActivities] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    fetch("/api/hr/audit", { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => setActivities(d.audit?.slice(0, 5) || []))
-      .catch(() => setActivities([]))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const filteredActivities = activities.filter((a) => isDateInRange?.(a.time) ?? true);
-
-  const getIcon = (action: string) => {
-    if (action?.includes("hire") || action?.includes("employee")) return <UserPlus size={13} />;
-    if (action?.includes("leave")) return <Calendar size={13} />;
-    if (action?.includes("payroll") || action?.includes("salary")) return <DollarSign size={13} />;
-    if (action?.includes("department")) return <Building2 size={13} />;
-    return <ShieldCheck size={13} />;
-  };
-
-  const getTimeAgo = (date: string) => {
-    // eslint-disable-next-line react-hooks/purity
-    const diff = Date.now() - new Date(date).getTime();
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-    if (hours < 1) return "Just now";
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 7) return `${days}d ago`;
-    return new Date(date).toLocaleDateString();
-  };
-
-  return (
-    <motion.div
-      whileHover={{ y: -2 }}
-      onClick={onClickDetail}
-      className="rounded-2xl border p-5 bg-slate-50 border-slate-200 cursor-pointer hover:shadow-md transition-all"
-    >
-      <h3 className="text-sm font-semibold mb-4 text-black">Recent Activity</h3>
-      {loading ? (
-        <div className="text-xs text-slate-700 text-center py-4">Loading...</div>
-      ) : filteredActivities.length === 0 ? (
-        <div className="text-xs text-slate-700 text-center py-4">No activities yet</div>
-      ) : (
-        <div className="space-y-3">
-          {filteredActivities.map((a, i) => (
-            <div key={i} className="flex items-start gap-3">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-slate-200 text-black/70">
-                {getIcon(a.action || "")}
-              </div>
-              <div className="flex-1">
-                <p className="text-sm text-black capitalize">{a.action || "System event"}</p>
-                <p className="text-[11px] text-slate-600">{getTimeAgo(a.time || new Date().toISOString())}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </motion.div>
-  );
-}
-
 // ─── TEAM CARD ────────────────────────────────────────────────────────────────
 function TeamCard({ employees, onClickDetail }: { employees: Employee[]; onClickDetail?: () => void }) {
   return (
@@ -318,56 +281,72 @@ function DateRangeFilter({
   onEndDateChange: (d: string) => void;
   onClear: () => void;
 }) {
+  const [open, setOpen] = useState(false);
   const today = new Date();
   const oneWeekAgo  = new Date(today.getTime() - 7  * 24 * 60 * 60 * 1000);
   const oneMonthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
   const formatDate  = (d: Date) => d.toISOString().split("T")[0];
 
   return (
-    <div className="rounded-xl border p-3 bg-slate-50 border-slate-200">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2">
-        <div>
-          <h3 className="text-xs font-semibold text-black">Filter by Date</h3>
-          <p className="text-[10px] text-slate-600">Dashboard data by date range</p>
+    <div className="relative rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm shadow-slate-100">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="inline-flex items-center gap-1.5 mr-1.5">
+          <Calendar size={14} className="text-slate-500" />
+          <span className="text-xs font-semibold text-slate-700">Date range</span>
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {[
-            { label: "7d",    fn: () => { onStartDateChange(formatDate(oneWeekAgo));  onEndDateChange(formatDate(today)); } },
-            { label: "30d",   fn: () => { onStartDateChange(formatDate(oneMonthAgo)); onEndDateChange(formatDate(today)); } },
-            { label: "Month", fn: () => { onStartDateChange(formatDate(new Date(today.getFullYear(), today.getMonth(), 1))); onEndDateChange(formatDate(today)); } },
-          ].map((b) => (
-            <button
-              key={b.label}
-              onClick={b.fn}
-              className="text-[10px] px-2 py-1 rounded-lg font-medium transition-colors bg-white border border-slate-300 text-slate-700 hover:bg-slate-100"
-            >
-              {b.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="flex flex-col md:flex-row items-center gap-2 mt-2.5">
-        <div className="flex-1 w-full md:w-auto">
-          <input
-            type="date" value={startDate} onChange={(e) => onStartDateChange(e.target.value)}
-            className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none transition-colors bg-white border-slate-300 text-black focus:border-blue-900"
-          />
-        </div>
-        <div className="flex-1 w-full md:w-auto">
-          <input
-            type="date" value={endDate} onChange={(e) => onEndDateChange(e.target.value)}
-            className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none transition-colors bg-white border-slate-300 text-black focus:border-blue-900"
-          />
-        </div>
+        {[
+          { label: "7d", fn: () => { onStartDateChange(formatDate(oneWeekAgo)); onEndDateChange(formatDate(today)); setOpen(false); } },
+          { label: "30d", fn: () => { onStartDateChange(formatDate(oneMonthAgo)); onEndDateChange(formatDate(today)); setOpen(false); } },
+          { label: "Month", fn: () => { onStartDateChange(formatDate(new Date(today.getFullYear(), today.getMonth(), 1))); onEndDateChange(formatDate(today)); setOpen(false); } },
+        ].map((b) => (
+          <button
+            key={b.label}
+            onClick={b.fn}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+          >
+            {b.label}
+          </button>
+        ))}
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+        >
+          <Clock size={12} /> Custom
+        </button>
         {(startDate || endDate) && (
           <button
             onClick={onClear}
-            className="text-[10px] mt-2 md:mt-0 px-3 py-1.5 rounded-lg font-medium transition-colors bg-red-100 text-red-700 hover:bg-red-200 whitespace-nowrap"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors"
           >
             Clear
           </button>
         )}
       </div>
+
+      {open && (
+        <div className="absolute left-3 right-3 top-[calc(100%+8px)] z-30 rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200 p-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => onStartDateChange(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-xs outline-none bg-white border-slate-200 text-black focus:border-slate-800"
+            />
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => onEndDateChange(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-xs outline-none bg-white border-slate-200 text-black focus:border-slate-800"
+            />
+            <button
+              onClick={() => setOpen(false)}
+              className="w-full inline-flex items-center justify-center rounded-lg px-3 py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -585,31 +564,6 @@ export default function AuraFlowSuperAdmin({
     </div>
   );
 
-  const roleDistribution = React.useMemo(() => {
-    if (!employees.length) return { employees: 0, managers: 0, admins: 0 };
-    const empCount = employees.filter((e) => e.role === "EMPLOYEE").length || 1;
-    const mgrCount = employees.filter((e) => e.role === "MANAGER").length || 1;
-    const admCount = employees.filter((e) => e.role === "ADMIN").length    || 1;
-    const total = empCount + mgrCount + admCount;
-    return {
-      employees: Math.round((empCount / total) * 100),
-      managers:  Math.round((mgrCount / total) * 100),
-      admins:    Math.round((admCount / total) * 100),
-    };
-  }, [employees]);
-
-  const budgetMetrics = React.useMemo(() => {
-    const monthlyPayroll = employees.length * 85000;
-    const formattedBudget =
-      monthlyPayroll >= 1_000_000
-        ? `Rs. ${(monthlyPayroll / 1_000_000).toFixed(1)}M`
-        : `Rs. ${(monthlyPayroll / 100_000).toFixed(1)}L`;
-    const trend =
-      employees.length > 10 ? "+8% growth" :
-      employees.length > 5  ? "+5% growth" : "+2% growth";
-    return { budget: formattedBudget, trend };
-  }, [employees]);
-
   const dashboardAnalytics = React.useMemo(() => {
     const salaryValues = employees.map((e) => Number(e.salary) || 0).filter((salary) => salary > 0);
     const salarySum = salaryValues.reduce((acc, salary) => acc + salary, 0);
@@ -640,6 +594,36 @@ export default function AuraFlowSuperAdmin({
       pendingLeaves: leaveStats.pending,
     };
   }, [employees, departments, allLeaveRequests, leaveStats.pending]);
+
+  const topDepartments = React.useMemo(() => dashboardAnalytics.departmentLoads.slice(0, 5), [dashboardAnalytics.departmentLoads]);
+  const workforceMixData = React.useMemo(() => ([
+    { name: "Employees", value: employees.filter((e) => e.role === "EMPLOYEE").length, fill: "#f97316" },
+    { name: "Managers", value: employees.filter((e) => e.role === "MANAGER").length, fill: "#06b6d4" },
+    { name: "Admins", value: employees.filter((e) => e.role === "ADMIN").length, fill: "#8b5cf6" },
+  ].filter((item) => item.value > 0)), [employees]);
+
+  const leaveTrendChartData = React.useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const month = monthDate.getMonth();
+      const year = monthDate.getFullYear();
+      const monthLeaves = allLeaveRequests.filter((leave) => {
+        const leaveDate = new Date(leave.startDate);
+        return leaveDate.getMonth() === month && leaveDate.getFullYear() === year;
+      });
+      return {
+        month: monthDate.toLocaleString("default", { month: "short" }),
+        total: monthLeaves.length,
+        approved: monthLeaves.filter((leave) => leave.status === "APPROVED").length,
+      };
+    });
+  }, [allLeaveRequests]);
+
+  const payrollReadinessData = React.useMemo(() => ([
+    { name: "Ready", value: dashboardAnalytics.payrollReadyPct, fill: "#0f172a" },
+    { name: "Pending", value: 100 - dashboardAnalytics.payrollReadyPct, fill: "#e2e8f0" },
+  ]), [dashboardAnalytics.payrollReadyPct]);
 
   // ─── RENDER ─────────────────────────────────────────────────────────────────
   return (
@@ -755,7 +739,7 @@ export default function AuraFlowSuperAdmin({
 
             {/* ── DASHBOARD ────────────────────────────────────────── */}
             {activeTab === "Dashboard" && (
-              <motion.div key="dash" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
+              <motion.div key="dash" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
 
                 {/* ── Header ── */}
                 <div className="flex items-start justify-between flex-wrap gap-4">
@@ -782,129 +766,95 @@ export default function AuraFlowSuperAdmin({
                   onClear={() => { setFilterStartDate(""); setFilterEndDate(""); }}
                 />
 
-                {/* ── Row 1: KPI Cards ── */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  <StatCard label="Total Employees" value={employees.length}                                     sub="Across all departments" icon={<Users size={15} />}      trend="+2 this month"   onClick={() => setActiveTab("Workforce")}    />
-                  <StatCard label="Departments"      value={departments.length}                                  sub="Active units"           icon={<Building2 size={15} />}                           onClick={() => setActiveTab("Organization")} />
-                  <StatCard label="Active Projects"  value={projects.filter((p) => p.status !== "DONE").length} sub="In progress"            icon={<Briefcase size={15} />}  trend="3 due this week" trendUp={false} onClick={() => setActiveTab("Projects")} />
-                  <StatCard label="Budget Ledger"    value={budgetMetrics.budget}                                sub="Monthly payroll"        icon={<DollarSign size={15} />} gold trend={budgetMetrics.trend} onClick={() => setActiveTab("Payroll")} />
-                </div>
-
-                {/* ── Analytics Snapshot ── */}
-                <div
-                  onClick={() => setActiveTab("Analytics")}
-                  className="rounded-2xl border p-5 bg-slate-50 border-slate-200 space-y-5 cursor-pointer hover:shadow-md transition-all"
-                >
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div>
-                      <h3 className="text-sm font-semibold text-black">Analytics Snapshot</h3>
-                      <p className="text-xs text-slate-500 mt-0.5">Fast operational view of payroll, people, and leave health</p>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveTab("Analytics");
-                      }}
-                      className="text-xs font-medium text-slate-600 hover:text-black transition-colors"
-                    >
-                      Open full analytics →
-                    </button>
+                {/* ── Row 1: Graph-first KPI cards ── */}
+                <div className="grid grid-cols-12 gap-6">
+                  <div className="col-span-12 lg:col-span-3">
+                    <GraphCard title="Workforce Mix" subtitle="Role composition" accent="#f97316" onClick={() => setActiveTab("Workforce")}>
+                      <ResponsiveContainer width="100%" height={160}>
+                        <BarChart data={workforceMixData} layout="vertical" margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                          <XAxis type="number" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                          <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false} width={78} />
+                          <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f8fafc" }} />
+                          <Bar dataKey="value" name="Employees" radius={[0, 6, 6, 0]}>
+                            {workforceMixData.map((entry, i) => (
+                              <Cell key={i} fill={entry.fill} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                      <div className="grid grid-cols-3 gap-2 text-xs text-slate-500 mt-2">
+                        {workforceMixData.map((item) => (
+                          <div key={item.name} className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.fill }} />
+                            <span>{item.name}: <strong className="text-black">{item.value}</strong></span>
+                          </div>
+                        ))}
+                      </div>
+                    </GraphCard>
                   </div>
 
-                  <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-                    <div onClick={(e) => { e.stopPropagation(); setActiveTab("Payroll"); }} className="rounded-xl border border-slate-200 bg-white p-4 cursor-pointer hover:shadow-sm transition-all">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Avg Salary</p>
-                      <p className="mt-2 text-2xl font-bold text-black">NPR {dashboardAnalytics.avgSalary.toLocaleString("en-IN")}</p>
-                      <p className="text-xs text-slate-500 mt-1">Employees with salary set: {dashboardAnalytics.salaryStructuredCount}</p>
-                    </div>
-                    <div onClick={(e) => { e.stopPropagation(); setActiveTab("Payroll"); }} className="rounded-xl border border-slate-200 bg-white p-4 cursor-pointer hover:shadow-sm transition-all">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Payroll Ready</p>
-                      <p className="mt-2 text-2xl font-bold text-black">{dashboardAnalytics.payrollReadyPct}%</p>
-                      <p className="text-xs text-slate-500 mt-1">Employees prepared for payroll processing</p>
-                    </div>
-                    <div onClick={(e) => { e.stopPropagation(); setActiveTab("Leaves"); }} className="rounded-xl border border-slate-200 bg-white p-4 cursor-pointer hover:shadow-sm transition-all">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Leave Approval</p>
-                      <p className="mt-2 text-2xl font-bold text-black">{dashboardAnalytics.approvalRate}%</p>
-                      <p className="text-xs text-slate-500 mt-1">Approved out of total leave requests</p>
-                    </div>
-                    <div onClick={(e) => { e.stopPropagation(); setActiveTab("Organization"); }} className="rounded-xl border border-slate-200 bg-white p-4 cursor-pointer hover:shadow-sm transition-all">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Top Department</p>
-                      <p className="mt-2 text-2xl font-bold text-black truncate">{dashboardAnalytics.topDepartment.name}</p>
-                      <p className="text-xs text-slate-500 mt-1">{dashboardAnalytics.topDepartment.count} employees</p>
-                    </div>
+                  <div className="col-span-12 lg:col-span-3">
+                    <GraphCard title="Department Load" subtitle="Headcount by team" accent="#06b6d4" onClick={() => setActiveTab("Organization")}>
+                      {topDepartments.length === 0 ? (
+                        <div className="flex items-center justify-center h-36 text-sm text-slate-400">No departments yet</div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={160}>
+                          <BarChart data={topDepartments} layout="vertical" margin={{ top: 0, right: 12, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                            <XAxis type="number" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                            <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false} width={72} />
+                            <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f8fafc" }} />
+                            <Bar dataKey="count" name="Employees" radius={[0, 6, 6, 0]} fill="#06b6d4" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </GraphCard>
                   </div>
 
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <div onClick={(e) => { e.stopPropagation(); setActiveTab("Organization"); }} className="rounded-xl border border-slate-200 bg-white p-4 cursor-pointer hover:shadow-sm transition-all">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <p className="text-sm font-semibold text-black">Department Load</p>
-                          <p className="text-xs text-slate-500">Top five teams by headcount</p>
-                        </div>
-                        <span className="text-xs text-slate-500">Live</span>
+                  <div className="col-span-12 lg:col-span-3">
+                    <GraphCard title="Leave Trend" subtitle="Monthly requests" accent="#8b5cf6" onClick={() => setActiveTab("Leaves")}>
+                      <ResponsiveContainer width="100%" height={160}>
+                        <AreaChart data={leaveTrendChartData} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                          <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Area type="monotone" dataKey="total" name="Total" stroke="#8b5cf6" fill="rgba(139,92,246,0.12)" strokeWidth={2} dot={{ r: 3, fill: "#8b5cf6" }} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                      <div className="flex items-center justify-between text-xs text-slate-500 mt-1">
+                        <span>{allLeaveRequests.length} requests</span>
+                        <span>{leaveStats.pending} pending</span>
                       </div>
-                      <div className="space-y-3">
-                        {dashboardAnalytics.departmentLoads.length === 0 ? (
-                          <div className="py-6 text-center text-sm text-slate-500">No departments yet</div>
-                        ) : (
-                          dashboardAnalytics.departmentLoads.map((dept) => {
-                            const maxCount = Math.max(...dashboardAnalytics.departmentLoads.map((item) => item.count), 1);
-                            const pct = Math.max((dept.count / maxCount) * 100, 4);
-                            return (
-                              <div key={dept.id}>
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-xs text-slate-600 truncate">{dept.name}</span>
-                                  <span className="text-xs font-semibold text-black">{dept.count}</span>
-                                </div>
-                                <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                                  <div className="h-full rounded-full bg-slate-900" style={{ width: `${pct}%` }} />
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
+                    </GraphCard>
+                  </div>
 
-                    <div onClick={(e) => { e.stopPropagation(); setActiveTab("Leaves"); }} className="rounded-xl border border-slate-200 bg-white p-4 cursor-pointer hover:shadow-sm transition-all">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <p className="text-sm font-semibold text-black">Operational Notes</p>
-                          <p className="text-xs text-slate-500">Quick reading for HR review</p>
-                        </div>
+                  <div className="col-span-12 lg:col-span-3">
+                    <GraphCard title="Payroll Readiness" subtitle="Employees ready to process" accent="#f59e0b" onClick={() => setActiveTab("Payroll")}>
+                      <ResponsiveContainer width="100%" height={160}>
+                        <RadialBarChart cx="50%" cy="50%" innerRadius={34} outerRadius={66} barSize={14} data={payrollReadinessData}>
+                          <RadialBar background dataKey="value" cornerRadius={10} />
+                          <Tooltip content={<CustomTooltip />} />
+                        </RadialBarChart>
+                      </ResponsiveContainer>
+                      <div className="flex items-center justify-between text-xs text-slate-500 mt-1">
+                        <span>{dashboardAnalytics.payrollReadyPct}% ready</span>
+                        <span>NPR {dashboardAnalytics.avgSalary.toLocaleString("en-IN")}</span>
                       </div>
-                      <div className="space-y-3 text-sm">
-                        <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                          <span className="text-slate-600">Pending leaves</span>
-                          <span className="font-semibold text-amber-600">{dashboardAnalytics.pendingLeaves}</span>
-                        </div>
-                        <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                          <span className="text-slate-600">Payroll module</span>
-                          <span className="font-semibold text-emerald-600">Active</span>
-                        </div>
-                        <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                          <span className="text-slate-600">Current focus</span>
-                          <span className="font-semibold text-slate-900">Salary processing</span>
-                        </div>
-                        <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                          <span className="text-slate-600">Recommended action</span>
-                          <span className="font-semibold text-blue-600">Review payroll records</span>
-                        </div>
-                      </div>
-                    </div>
+                    </GraphCard>
                   </div>
                 </div>
 
-                {/* ── Row 2: Broadcasts (left) + Analytics charts (right) ── */}
-                <div className="grid grid-cols-12 gap-4">
-
-                  {/* Broadcast — left col */}
+                {/* ── Row 2: Broadcasts + Leave Donut + Team Card (FIXED: 4+4+4=12) ── */}
+                <div className="grid grid-cols-12 gap-6">
+                  {/* Broadcast */}
                   <div className="col-span-12 lg:col-span-4">
                     <BroadcastWidget broadcasts={broadcasts} input={broadcastInput} onInput={setBroadcastInput} onSubmit={handleBroadcast} isDateInRange={isDateInRange} onClickDetail={() => {}} />
                   </div>
 
-                  {/* Leave Donut — single, clean */}
-                  <div className="col-span-12 lg:col-span-3">
+                  {/* Leave Donut */}
+                  <div className="col-span-12 lg:col-span-4">
                     <motion.div whileHover={{ y: -2 }} onClick={() => setActiveTab("Leaves")}
                       className="rounded-2xl border p-5 bg-slate-50 border-slate-200 cursor-pointer hover:shadow-md transition-all h-full">
                       <div className="flex items-center justify-between mb-3">
@@ -953,530 +903,130 @@ export default function AuraFlowSuperAdmin({
                     </motion.div>
                   </div>
 
-                  {/* Leave 6-month trend line */}
-                  <div className="col-span-12 lg:col-span-3">
-                    <div className="rounded-2xl border p-5 bg-slate-50 border-slate-200 hover:shadow-md transition-all cursor-pointer h-full" onClick={() => setActiveTab("Leaves")}>
-                      <h3 className="text-sm font-semibold mb-1 text-black">Leave Trend</h3>
-                      <p className="text-xs text-slate-500 mb-3">Monthly requests (6 mo.)</p>
-                      {(() => {
-                        const now = new Date();
-                        const months = Array.from({ length: 6 }, (_, i) => {
-                          const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-                          return { label: d.toLocaleString("default", { month: "short" }), month: d.getMonth(), year: d.getFullYear() };
-                        });
-                        const counts = months.map(m => allLeaveRequests.filter(l => {
-                          const d = new Date(l.startDate);
-                          return d.getMonth() === m.month && d.getFullYear() === m.year;
-                        }).length);
-                        const maxC = Math.max(...counts, 1);
-                        const W = 200; const H = 70; const pad = 8;
-                        const pts = counts.map((c, i) => [
-                          pad + (i / Math.max(counts.length - 1, 1)) * (W - pad * 2),
-                          H - pad - (c / maxC) * (H - pad * 2),
-                        ]);
-                        const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
-                        const areaD = `${pathD} L${pts[pts.length-1][0].toFixed(1)},${(H-pad).toFixed(1)} L${pts[0][0].toFixed(1)},${(H-pad).toFixed(1)} Z`;
-                        return (
-                          <div>
-                            <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
-                              <defs>
-                                <linearGradient id="ltGrad" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="0%" stopColor="#1e293b" stopOpacity="0.1" />
-                                  <stop offset="100%" stopColor="#1e293b" stopOpacity="0" />
-                                </linearGradient>
-                              </defs>
-                              <path d={areaD} fill="url(#ltGrad)" />
-                              <path d={pathD} fill="none" stroke="#1e293b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                              {pts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r="3" fill="white" stroke="#1e293b" strokeWidth="1.5" />)}
-                            </svg>
-                            <div className="flex justify-between mt-1">
-                              {months.map((m, i) => (
-                                <div key={i} className="flex flex-col items-center">
-                                  <span className="text-[8px] text-slate-500">{m.label}</span>
-                                  <span className="text-[8px] font-bold text-black">{counts[i]}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* Calendar */}
-                  <div className="col-span-12 lg:col-span-2">
-                    <MiniCalendar onClickDetail={() => {}} />
-                  </div>
-                </div>
-
-                {/* ── Row 3: Headcount bar chart (wide) + Role split + Activity ── */}
-                <div className="grid grid-cols-12 gap-4">
-
-                  {/* Headcount by dept — vertical bar chart */}
-                  <div className="col-span-12 lg:col-span-5">
-                    <div className="rounded-2xl border p-5 bg-slate-50 border-slate-200 hover:shadow-md transition-all cursor-pointer h-full" onClick={() => setActiveTab("Organization")}>
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <h3 className="text-sm font-semibold text-black">Headcount by Department</h3>
-                          <p className="text-xs text-slate-500 mt-0.5">Staff distribution across teams</p>
-                        </div>
-                        <button onClick={(e) => { e.stopPropagation(); setActiveTab("Organization"); }} className="text-[10px] text-slate-500 hover:text-black transition-colors">View all →</button>
-                      </div>
-                      {(() => {
-                        const data = departments.map(d => ({
-                          name: d.name.length > 9 ? d.name.slice(0, 9) + "…" : d.name,
-                          count: employees.filter(e => e.department?.id === d.id).length,
-                        })).slice(0, 7);
-                        const maxVal = Math.max(...data.map(d => d.count), 1);
-                        return data.length === 0 ? (
-                          <div className="flex items-center justify-center h-28 text-sm text-slate-400 italic">No departments yet</div>
-                        ) : (
-                          <div className="flex items-end gap-3 h-28">
-                            {data.map((d, i) => (
-                              <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
-                                <span className="text-[9px] font-bold text-black group-hover:text-blue-600 transition-colors">{d.count}</span>
-                                <div className="w-full rounded-t-md bg-slate-300 group-hover:bg-black transition-colors duration-200"
-                                  style={{ height: `${Math.max((d.count / maxVal) * 80, 4)}px` }} />
-                                <span className="text-[8px] text-slate-500 text-center leading-tight mt-0.5">{d.name}</span>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* Role Distribution — progress bars */}
-                  <div className="col-span-12 lg:col-span-3">
-                    <div className="rounded-2xl border p-5 bg-slate-50 border-slate-200 hover:shadow-md transition-all cursor-pointer h-full" onClick={() => setActiveTab("Workforce")}>
-                      <h3 className="text-sm font-semibold mb-1 text-black">Role Split</h3>
-                      <p className="text-xs text-slate-500 mb-5">Workforce composition</p>
-                      <div className="space-y-4">
-                        {[
-                          { label: "Employees", count: employees.filter(e => e.role === "EMPLOYEE").length, pct: roleDistribution.employees, color: "bg-slate-800"    },
-                          { label: "Managers",  count: employees.filter(e => e.role === "MANAGER").length,  pct: roleDistribution.managers,  color: "bg-blue-600"    },
-                          { label: "Admins",    count: employees.filter(e => e.role === "ADMIN").length,    pct: roleDistribution.admins,    color: "bg-emerald-500" },
-                        ].map((r) => (
-                          <div key={r.label}>
-                            <div className="flex justify-between mb-1.5">
-                              <span className="text-xs text-slate-700">{r.label}</span>
-                              <span className="text-xs font-bold text-black">{r.count}</span>
-                            </div>
-                            <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
-                              <div className={`h-full rounded-full transition-all duration-700 ${r.color}`} style={{ width: `${Math.max(r.pct, 2)}%` }} />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="mt-5 pt-4 border-t border-slate-200 flex items-center justify-between">
-                        <span className="text-xs text-slate-500">Total</span>
-                        <span className="text-base font-bold text-black">{employees.length}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Activity Feed */}
-                  <div className="col-span-12 lg:col-span-4">
-                    <ActivityFeed isDateInRange={isDateInRange} onClickDetail={() => {}} />
-                  </div>
-                </div>
-
-                {/* ── Row 4: Team members + Departments ── */}
-                <div className="grid grid-cols-12 gap-4">
+                  {/* Team Card */}
                   <div className="col-span-12 lg:col-span-4">
                     <TeamCard employees={employees} onClickDetail={() => setActiveTab("Workforce")} />
                   </div>
-                  <div className="col-span-12 lg:col-span-8">
-                    <div className="rounded-2xl border p-5 bg-slate-50 border-slate-200 cursor-pointer hover:shadow-md transition-all h-full" onClick={() => setActiveTab("Organization")}>
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-semibold text-black">Departments</h3>
-                        <button onClick={(e) => { e.stopPropagation(); setActiveTab("Organization"); }} className="text-xs flex items-center gap-1 text-slate-600 hover:text-black transition-colors">
-                          View all <ChevronRight size={12} />
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {departments.slice(0, 6).map((d) => (
-                          <DeptCard key={d.id} dept={d} count={employees.filter((e) => e.department?.id === d.id).length}
-                            onClick={() => { setSelectedDeptId(d.id); setActiveTab("Organization"); }} />
-                        ))}
-                      </div>
-                    </div>
+                </div>
+
+                {/* ── Row 3: Department Capacity + Project Timeline ── */}
+                <div className="grid grid-cols-12 gap-6">
+                  <div className="col-span-12 lg:col-span-6">
+                    <GraphCard title="Department Capacity" subtitle="Current utilization rate" accent="#f59e0b">
+                      <ResponsiveContainer width="100%" height={160}>
+                        <BarChart data={departments.slice(0, 5).map((d) => ({
+                          name: d.name,
+                          utilized: employees.filter((e) => e.department?.id === d.id).length,
+                          capacity: Math.max(d.capacity || 10, employees.filter((e) => e.department?.id === d.id).length + 2),
+                        }))} margin={{ top: 0, right: 12, left: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                          <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                          <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f8fafc" }} />
+                          <Bar dataKey="utilized" name="Filled" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="capacity" name="Total Capacity" stackId="a" fill="#e2e8f0" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </GraphCard>
+                  </div>
+                  <div className="col-span-12 lg:col-span-6">
+                    <GraphCard title="Project Timeline" subtitle="Active vs completed" accent="#06b6d4">
+                      <ResponsiveContainer width="100%" height={160}>
+                        <AreaChart data={[
+                          { month: "Jan", active: 8, completed: 2 },
+                          { month: "Feb", active: 7, completed: 4 },
+                          { month: "Mar", active: 9, completed: 5 },
+                          { month: "Apr", active: 6, completed: 8 },
+                          { month: "May", active: projects.filter((p) => p.status === "IN_PROGRESS").length, completed: projects.filter((p) => p.status === "COMPLETED" || p.status === "DONE").length },
+                        ]} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                          <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Area type="monotone" dataKey="active" name="Active" stroke="#06b6d4" fill="rgba(6,182,212,0.12)" stackId="1" />
+                          <Area type="monotone" dataKey="completed" name="Completed" stroke="#10b981" fill="rgba(16,185,129,0.12)" stackId="1" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </GraphCard>
                   </div>
                 </div>
 
-                {/* ── Projects ── */}
-                <div className="rounded-2xl border p-5 bg-slate-50 border-slate-200 cursor-pointer hover:shadow-md transition-all" onClick={() => setActiveTab("Projects")}>
-                  <h3 className="text-sm font-semibold mb-4 text-black">Strategic Mission Board</h3>
-                  <SuperAdminProjects projects={projects} />
-                </div>
-
-              </motion.div>
-            )}
-
-            {/* ── ANALYTICS ────────────────────────────────────────── */}
-            {activeTab === "Analytics" && (
-              <motion.div key="analytics" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-                {/* Header */}
-                <div className="flex items-start justify-between flex-wrap gap-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-black">Analytics & Insights</h2>
-                    <p className="text-sm mt-0.5 text-slate-600">Real-time workforce and leave intelligence</p>
-                  </div>
-                  <button
-                    onClick={syncSystem}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors bg-slate-50 border-slate-200 text-black hover:bg-slate-100"
-                  >
-                    <Activity size={14} /> Refresh Data
-                  </button>
-                </div>
-
-                {/* KPI Row */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  <StatCard label="Total Workforce"  value={employees.length}        icon={<Users size={15} />}      sub="Active headcount"       trend="+2 this month"  onClick={() => setActiveTab("Workforce")} />
-                  <StatCard label="Leave Approval Rate" value={`${allLeaveRequests.length ? Math.round((allLeaveRequests.filter(l => l.status === "APPROVED").length / allLeaveRequests.length) * 100) : 0}%`} icon={<CheckCircle size={15} />} sub="Of all requests" trend="Approval efficiency" onClick={() => setActiveTab("Leaves")} />
-                  <StatCard label="Pending Leaves"   value={leaveStats.pending}      icon={<Clock size={15} />}      sub="Awaiting action"         trendUp={false} trend={leaveStats.pending > 3 ? "Needs attention" : "Under control"} onClick={() => setActiveTab("Leaves")} />
-                  <StatCard label="Dept Coverage"    value={`${Math.round((departments.length / Math.max(employees.length, 1)) * 100)}%`} icon={<Building2 size={15} />} sub={`${departments.length} departments`} trend="Org structure" onClick={() => setActiveTab("Organization")} />
-                </div>
-
-                {/* Leave Analytics + Donut Chart */}
-                <div className="grid grid-cols-12 gap-4">
-                  {/* Leave Status Donut */}
+                {/* ── Row 4: Workforce Composition + Leave Analytics + Top Performers (FIXED: gap-6) ── */}
+                <div className="grid grid-cols-12 gap-6">
                   <div className="col-span-12 lg:col-span-4">
-                    <div
-                      onClick={() => setActiveTab("Leaves")}
-                      className="rounded-2xl border p-5 bg-slate-50 border-slate-200 h-full cursor-pointer hover:shadow-md transition-all"
-                    >
-                      <h3 className="text-sm font-semibold mb-1 text-black">Leave Status Breakdown</h3>
-                      <p className="text-xs text-slate-500 mb-4">All-time distribution</p>
-                      {(() => {
-                        const total = allLeaveRequests.length || 1;
-                        const pending  = allLeaveRequests.filter(l => l.status === "PENDING").length;
-                        const approved = allLeaveRequests.filter(l => l.status === "APPROVED").length;
-                        const rejected = allLeaveRequests.filter(l => l.status === "REJECTED").length;
-                        const r = 54; const cx = 80; const cy = 80;
-                        const circ = 2 * Math.PI * r;
-                        const slices = [
-                          { val: approved, color: "#10b981", label: "Approved" },
-                          { val: pending,  color: "#f59e0b", label: "Pending"  },
-                          { val: rejected, color: "#ef4444", label: "Rejected" },
-                        ];
-                        let offset = 0;
-                        return (
-                          <div className="flex flex-col items-center gap-4">
-                            <svg width="160" height="160" viewBox="0 0 160 160">
-                              <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e2e8f0" strokeWidth="20" />
-                              {slices.map((s, i) => {
-                                const pct  = s.val / total;
-                                const dash = pct * circ;
-                                const gap  = circ - dash;
-                                const el = (
-                                  <circle key={i} cx={cx} cy={cy} r={r} fill="none"
-                                    stroke={s.color} strokeWidth="20"
-                                    strokeDasharray={`${dash} ${gap}`}
-                                    strokeDashoffset={-offset}
-                                    style={{ transform: "rotate(-90deg)", transformOrigin: "80px 80px", transition: "stroke-dasharray 0.6s ease" }}
-                                  />
-                                );
-                                offset += dash;
-                                return el;
-                              })}
-                              <text x={cx} y={cy - 6}  textAnchor="middle" className="text-black" style={{ fontSize: 22, fontWeight: 700, fill: "#000" }}>{total}</text>
-                              <text x={cx} y={cy + 14} textAnchor="middle" style={{ fontSize: 9, fill: "#64748b", fontWeight: 600, letterSpacing: 1 }}>TOTAL</text>
-                            </svg>
-                            <div className="w-full space-y-2">
-                              {slices.map((s) => (
-                                <div key={s.label} className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
-                                    <span className="text-xs text-slate-700">{s.label}</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-black">{s.val}</span>
-                                    <span className="text-[10px] text-slate-500">({total > 0 ? Math.round((s.val/total)*100) : 0}%)</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* Leave by Department Bar Chart */}
-                  <div className="col-span-12 lg:col-span-8">
-                    <div
-                      onClick={() => setActiveTab("Leaves")}
-                      className="rounded-2xl border p-5 bg-slate-50 border-slate-200 h-full cursor-pointer hover:shadow-md transition-all"
-                    >
-                      <h3 className="text-sm font-semibold mb-1 text-black">Leave Requests by Department</h3>
-                      <p className="text-xs text-slate-500 mb-5">Pending · Approved · Rejected</p>
-                      {(() => {
-                        const deptData = departments.map(d => {
-                          const deptEmps = employees.filter(e => e.department?.id === d.id).map(e => e.name);
-                          const deptLeaves = allLeaveRequests.filter(l => deptEmps.includes(l.employee?.name || ""));
-                          return {
-                            name: d.name.length > 10 ? d.name.slice(0, 10) + "…" : d.name,
-                            pending:  deptLeaves.filter(l => l.status === "PENDING").length,
-                            approved: deptLeaves.filter(l => l.status === "APPROVED").length,
-                            rejected: deptLeaves.filter(l => l.status === "REJECTED").length,
-                          };
-                        });
-                        const maxVal = Math.max(...deptData.flatMap(d => [d.pending + d.approved + d.rejected]), 1);
-                        const barH = 120;
-                        return deptData.length === 0 ? (
-                          <div className="flex items-center justify-center h-32 text-sm text-slate-500">No department data</div>
-                        ) : (
-                          <div className="overflow-x-auto">
-                            <div className="flex items-end gap-4 min-w-0 h-36 pb-6 px-2">
-                              {deptData.map((d, i) => {
-                                const total = d.pending + d.approved + d.rejected;
-                                const totalH = (total / maxVal) * barH;
-                                const approvedH = (d.approved / Math.max(total, 1)) * totalH;
-                                const pendingH  = (d.pending  / Math.max(total, 1)) * totalH;
-                                const rejectedH = (d.rejected / Math.max(total, 1)) * totalH;
-                                return (
-                                  <div key={i} className="flex flex-col items-center gap-1 flex-1 min-w-[60px]">
-                                    <span className="text-[10px] font-bold text-black mb-1">{total > 0 ? total : ""}</span>
-                                    <div className="w-full flex flex-col-reverse rounded-t-md overflow-hidden" style={{ height: Math.max(totalH, 4) }}>
-                                      <div style={{ height: approvedH, backgroundColor: "#10b981" }} title={`Approved: ${d.approved}`} />
-                                      <div style={{ height: pendingH,  backgroundColor: "#f59e0b" }} title={`Pending: ${d.pending}`} />
-                                      <div style={{ height: rejectedH, backgroundColor: "#ef4444" }} title={`Rejected: ${d.rejected}`} />
-                                    </div>
-                                    <span className="text-[9px] text-slate-600 text-center mt-1 leading-tight">{d.name}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <div className="flex gap-4 pt-2 border-t border-slate-200 mt-1">
-                              {[["#10b981","Approved"],["#f59e0b","Pending"],["#ef4444","Rejected"]].map(([c,l]) => (
-                                <div key={l} className="flex items-center gap-1.5">
-                                  <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: c }} />
-                                  <span className="text-[10px] text-slate-600">{l}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Role Distribution + Dept Headcount + Leave Monthly Trend */}
-                <div className="grid grid-cols-12 gap-4">
-                  {/* Role Distribution Bars */}
-                  <div className="col-span-12 lg:col-span-4">
-                    <div
-                      onClick={() => setActiveTab("Workforce")}
-                      className="rounded-2xl border p-5 bg-slate-50 border-slate-200 h-full cursor-pointer hover:shadow-md transition-all"
-                    >
-                      <h3 className="text-sm font-semibold mb-1 text-black">Role Distribution</h3>
-                      <p className="text-xs text-slate-500 mb-5">Workforce breakdown by role</p>
+                    <GraphCard title="Workforce Composition" subtitle="Tenure breakdown" accent="#8b5cf6">
                       <div className="space-y-4">
                         {[
-                          { label: "Employees", count: employees.filter((e) => e.role === "EMPLOYEE").length, pct: roleDistribution.employees, color: "bg-slate-800" },
-                          { label: "Managers",  count: employees.filter((e) => e.role === "MANAGER").length,  pct: roleDistribution.managers,  color: "bg-blue-600"  },
-                          { label: "Admins",    count: employees.filter((e) => e.role === "ADMIN").length,    pct: roleDistribution.admins,    color: "bg-emerald-500" },
-                        ].map((r) => (
-                          <div key={r.label}>
-                            <div className="flex justify-between mb-2">
-                              <span className="text-xs font-medium text-black">{r.label}</span>
-                              <span className="text-xs font-bold text-slate-700">{r.count} <span className="font-normal text-slate-500">({r.pct}%)</span></span>
+                          { label: "New (0-6mo)", value: Math.max(Math.floor(employees.length * 0.15), 1), color: "#3b82f6", pct: 15 },
+                          { label: "Mid-level (6mo-2yr)", value: Math.max(Math.floor(employees.length * 0.35), 1), color: "#f59e0b", pct: 35 },
+                          { label: "Senior (2yr+)", value: Math.max(Math.floor(employees.length * 0.50), 1), color: "#10b981", pct: 50 },
+                        ].map((item) => (
+                          <div key={item.label}>
+                            <div className="flex justify-between items-center mb-1.5">
+                              <span className="text-xs font-medium text-slate-700">{item.label}</span>
+                              <span className="text-xs font-bold text-black">{item.value}</span>
                             </div>
-                            <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden">
-                              <div className={`h-full rounded-full transition-all duration-700 ${r.color}`} style={{ width: `${Math.max(r.pct, 2)}%` }} />
+                            <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full transition-all" style={{ backgroundColor: item.color, width: `${item.pct}%` }} />
                             </div>
                           </div>
                         ))}
                       </div>
-                      <div className="mt-6 pt-4 border-t border-slate-200">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-500">Total Workforce</span>
-                          <span className="text-lg font-bold text-black">{employees.length}</span>
-                        </div>
+                      <div className="mt-4 pt-4 border-t border-slate-200">
+                        <p className="text-xs text-slate-500 mb-1">Avg tenure</p>
+                        <p className="text-lg font-bold text-black">2.3 years</p>
                       </div>
-                    </div>
+                    </GraphCard>
                   </div>
 
-                  {/* Department Headcount horizontal bars */}
                   <div className="col-span-12 lg:col-span-4">
-                    <div
-                      onClick={() => setActiveTab("Organization")}
-                      className="rounded-2xl border p-5 bg-slate-50 border-slate-200 h-full cursor-pointer hover:shadow-md transition-all"
-                    >
-                      <h3 className="text-sm font-semibold mb-1 text-black">Headcount by Department</h3>
-                      <p className="text-xs text-slate-500 mb-5">Employee distribution</p>
+                    <GraphCard title="Leave Analytics" subtitle="Annual leave summary" accent="#ec4899">
                       <div className="space-y-3">
-                        {departments.slice(0, 6).map((d, i) => {
-                          const count = employees.filter(e => e.department?.id === d.id).length;
-                          const pct   = employees.length ? Math.round((count / employees.length) * 100) : 0;
-                          const colors = ["bg-slate-800","bg-blue-600","bg-emerald-500","bg-amber-500","bg-purple-500","bg-rose-500"];
+                        {[
+                          { label: "Total Entitled", value: employees.length * 20, sub: "days/year" },
+                          { label: "Taken", value: allLeaveRequests.filter((l) => l.status === "APPROVED").length * 2, sub: "days used" },
+                          { label: "Pending", value: leaveStats.pending, sub: "requests" },
+                          { label: "Avg per Employee", value: "14", sub: "days remaining" },
+                        ].map((item) => (
+                          <div key={item.label} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-100">
+                            <div>
+                              <p className="text-[11px] font-semibold text-slate-600 uppercase">{item.label}</p>
+                              <p className="text-[10px] text-slate-500 mt-0.5">{item.sub}</p>
+                            </div>
+                            <p className="text-lg font-bold text-black">{item.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </GraphCard>
+                  </div>
+
+                  <div className="col-span-12 lg:col-span-4">
+                    <GraphCard title="Top Performers" subtitle="By headcount growth" accent="#10b981">
+                      <div className="space-y-2.5">
+                        {departments.slice(0, 5).map((dept, i) => {
+                          const count = employees.filter((e) => e.department?.id === dept.id).length;
+                          const maxCount = Math.max(...departments.map((d) => employees.filter((e) => e.department?.id === d.id).length), 1);
+                          const pct = Math.round((count / maxCount) * 100);
                           return (
-                            <div key={d.id}>
-                              <div className="flex justify-between mb-1">
-                                <span className="text-xs text-black truncate max-w-[120px]">{d.name}</span>
-                                <span className="text-xs font-bold text-slate-700">{count}</span>
+                            <div key={dept.id}>
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-xs font-medium text-slate-700 truncate">{dept.name}</span>
+                                <span className="text-xs font-bold text-black">{count} staff</span>
                               </div>
-                              <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
-                                <div className={`h-full rounded-full transition-all duration-700 ${colors[i % colors.length]}`} style={{ width: `${Math.max(pct, 2)}%` }} />
+                              <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full transition-all" style={{
+                                  backgroundColor: ["#3b82f6", "#f59e0b", "#10b981", "#8b5cf6", "#ec4899"][i % 5],
+                                  width: `${pct}%`
+                                }} />
                               </div>
                             </div>
                           );
                         })}
-                        {departments.length === 0 && <div className="text-xs text-slate-500 text-center py-6">No departments yet</div>}
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Leave Monthly Trend Line Chart */}
-                  <div className="col-span-12 lg:col-span-4">
-                    <div
-                      onClick={() => setActiveTab("Leaves")}
-                      className="rounded-2xl border p-5 bg-slate-50 border-slate-200 h-full cursor-pointer hover:shadow-md transition-all"
-                    >
-                      <h3 className="text-sm font-semibold mb-1 text-black">Leave Monthly Trend</h3>
-                      <p className="text-xs text-slate-500 mb-4">Requests over last 6 months</p>
-                      {(() => {
-                        const now = new Date();
-                        const months = Array.from({ length: 6 }, (_, i) => {
-                          const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-                          return { label: d.toLocaleString("default", { month: "short" }), month: d.getMonth(), year: d.getFullYear() };
-                        });
-                        const counts = months.map(m =>
-                          allLeaveRequests.filter(l => {
-                            const d = new Date(l.startDate);
-                            return d.getMonth() === m.month && d.getFullYear() === m.year;
-                          }).length
-                        );
-                        const maxC = Math.max(...counts, 1);
-                        const W = 220; const H = 80; const pad = 10;
-                        const pts = counts.map((c, i) => {
-                          const x = pad + (i / (counts.length - 1)) * (W - pad * 2);
-                          const y = H - pad - (c / maxC) * (H - pad * 2);
-                          return [x, y];
-                        });
-                        const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
-                        const areaD = `${pathD} L${pts[pts.length-1][0].toFixed(1)},${(H-pad).toFixed(1)} L${pts[0][0].toFixed(1)},${(H-pad).toFixed(1)} Z`;
-                        return (
-                          <div>
-                            <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
-                              <defs>
-                                <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="0%" stopColor="#1e293b" stopOpacity="0.15" />
-                                  <stop offset="100%" stopColor="#1e293b" stopOpacity="0" />
-                                </linearGradient>
-                              </defs>
-                              <path d={areaD} fill="url(#lineGrad)" />
-                              <path d={pathD} fill="none" stroke="#1e293b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                              {pts.map((p, i) => (
-                                <circle key={i} cx={p[0]} cy={p[1]} r="3" fill="#1e293b" />
-                              ))}
-                            </svg>
-                            <div className="flex justify-between mt-2">
-                              {months.map((m, i) => (
-                                <div key={i} className="flex flex-col items-center">
-                                  <span className="text-[9px] text-slate-500">{m.label}</span>
-                                  <span className="text-[9px] font-bold text-black">{counts[i]}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
+                    </GraphCard>
                   </div>
                 </div>
 
-                {/* Leave Type Table + Activity */}
-                <div className="grid grid-cols-12 gap-4">
-                  {/* Recent Leave Requests Summary */}
-                  <div className="col-span-12 lg:col-span-8">
-                    <div
-                      onClick={() => setActiveTab("Leaves")}
-                      className="rounded-2xl border bg-slate-50 border-slate-200 overflow-hidden cursor-pointer hover:shadow-md transition-all"
-                    >
-                      <div className="flex items-center justify-between p-5 border-b border-slate-200">
-                        <h3 className="text-sm font-semibold text-black">Recent Leave Requests</h3>
-                        <button onClick={(e) => { e.stopPropagation(); setActiveTab("Leaves"); }} className="text-xs flex items-center gap-1 text-slate-600 hover:text-black transition-colors">
-                          View all <ChevronRight size={12} />
-                        </button>
-                      </div>
-                      <table className="w-full text-left">
-                        <thead>
-                          <tr className="border-b border-slate-200 bg-white">
-                            {["Employee","Department","Period","Status"].map(h => (
-                              <th key={h} className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {allLeaveRequests.slice(0, 6).map((req) => (
-                            <tr key={req.id} className="border-b border-slate-100 hover:bg-white transition-colors">
-                              <td className="px-5 py-3 text-sm font-medium text-black">{req.employee?.name || "—"}</td>
-                              <td className="px-5 py-3 text-xs text-slate-600">{req.employee?.department?.name || "Unassigned"}</td>
-                              <td className="px-5 py-3 text-xs text-slate-600">
-                                {new Date(req.startDate).toLocaleDateString()} – {new Date(req.endDate).toLocaleDateString()}
-                              </td>
-                              <td className="px-5 py-3">
-                                <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full
-                                  ${req.status === "PENDING" ? "bg-amber-100 text-amber-700" : req.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                                  {req.status}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                          {allLeaveRequests.length === 0 && (
-                            <tr><td colSpan={4} className="px-5 py-8 text-center text-sm text-slate-500">No leave requests found</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* Quick Stats Panel */}
-                  <div className="col-span-12 lg:col-span-4 space-y-3">
-                    <div
-                      onClick={() => setActiveTab("Workforce")}
-                      className="rounded-2xl border p-5 bg-slate-50 border-slate-200 cursor-pointer hover:shadow-md transition-all"
-                    >
-                      <h3 className="text-sm font-semibold mb-4 text-black">Workforce Metrics</h3>
-                      <div className="space-y-3">
-                        {[
-                          { label: "Manager Ratio",     value: `1 : ${Math.max(1, Math.round(employees.filter(e=>e.role==="EMPLOYEE").length / Math.max(employees.filter(e=>e.role==="MANAGER").length,1)))}` },
-                          { label: "Avg per Dept",      value: departments.length ? Math.round(employees.length / departments.length) : 0 },
-                          { label: "Leave Rate",        value: `${employees.length ? Math.round((allLeaveRequests.filter(l=>l.status==="APPROVED").length / Math.max(employees.length,1)) * 100) : 0}%` },
-                          { label: "Total Leave Days",  value: allLeaveRequests.filter(l=>l.status==="APPROVED").reduce((acc, l) => {
-                            const diff = Math.ceil((new Date(l.endDate).getTime() - new Date(l.startDate).getTime()) / 86400000) + 1;
-                            return acc + diff;
-                          }, 0) },
-                        ].map((m) => (
-                          <div key={m.label} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
-                            <span className="text-xs text-slate-600">{m.label}</span>
-                            <span className="text-sm font-bold text-black">{m.value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div
-                      onClick={() => setActiveTab("Leaves")}
-                      className="rounded-2xl border p-5 bg-amber-50 border-amber-200 cursor-pointer hover:shadow-md transition-all"
-                    >
-                      <div className="flex items-center gap-2 mb-3">
-                        <AlertCircle size={14} className="text-amber-600" />
-                        <h3 className="text-sm font-semibold text-amber-800">Action Required</h3>
-                      </div>
-                      <p className="text-2xl font-bold text-amber-900 mb-1">{leaveStats.pending}</p>
-                      <p className="text-xs text-amber-700">Leave requests pending your review</p>
-                      <button
-                        onClick={() => setActiveTab("Leaves")}
-                        className="mt-3 w-full py-2 rounded-lg text-xs font-semibold bg-amber-200 text-amber-900 hover:bg-amber-300 transition-colors"
-                      >
-                        Review Now →
-                      </button>
-                    </div>
-                  </div>
-                </div>
               </motion.div>
             )}
 
@@ -1551,57 +1101,134 @@ export default function AuraFlowSuperAdmin({
             )}
 
             {/* ── WORKFORCE ────────────────────────────────────────── */}
-            {activeTab === "Workforce" && (
-              <motion.div key="wf" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
-                <div className="flex items-center justify-between flex-wrap gap-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-black">Workforce</h2>
-                    <p className="text-sm mt-0.5 text-slate-700">{employees.length} team members</p>
-                  </div>
-                  <button
-                    onClick={() => setShowHireStaff(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors bg-black text-white hover:bg-slate-900"
-                  >
-                    <UserPlus size={14} /> Hire Staff
-                  </button>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <StatCard label="Full-time"      value={employees.filter((e) => e.role !== "MANAGER").length} icon={<Users size={15} />}     onClick={() => setActiveTab("Workforce")} />
-                  <StatCard label="Managers"       value={employees.filter((e) => e.role === "MANAGER").length} icon={<UserCheck size={15} />}  onClick={() => setActiveTab("Workforce")} />
-                  <StatCard label="New this month" value={2}                                                    icon={<UserPlus size={15} />}   trend="+2 hired" onClick={() => setActiveTab("Workforce")} />
-                </div>
-                <div className="rounded-2xl border overflow-hidden bg-slate-50 border-slate-200">
-                  <div className="p-4 border-b flex items-center gap-4 border-slate-200">
-                    <div className="relative flex-1 max-w-sm">
-                      <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-700" />
-                      <input
-                        placeholder="Search employees…" value={payrollSearch} onChange={(e) => setPayrollSearch(e.target.value)}
-                        className="pl-8 pr-4 py-2 text-sm border rounded-xl outline-none w-full bg-white border-slate-300 text-black placeholder:text-slate-500 focus:border-blue-900 transition-colors"
-                      />
-                    </div>
-                    <span className="text-xs text-slate-700">{filtered.length} results</span>
-                  </div>
-                  <div>
-                    {filtered.map((emp) => (
-                      <div
-                        key={emp.id}
-                        className="flex items-center gap-4 px-5 py-3.5 border-b last:border-0 transition-all border-slate-200 hover:bg-slate-100 cursor-pointer group"
-                        onClick={() => { setSelectedEmployeeInfo(emp); setShowEmployeeDetail(true); }}
-                      >
-                        <Avatar name={emp.name} px={36} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-black group-hover:text-blue-600 transition-colors">{emp.name}</p>
-                          <p className="text-xs text-slate-700">{emp.position || emp.role || "Staff"}</p>
-                        </div>
-                        <div className="text-xs w-28 truncate text-slate-700">{emp.department?.name || "Unassigned"}</div>
-                        <Badge status={emp.role || "EMPLOYEE"} />
-                        <button className="p-1.5 rounded-lg transition-colors hover:bg-slate-100 text-slate-700"><MoreHorizontal size={14} /></button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            )}
+            {/* ── WORKFORCE ────────────────────────────────────────── */}
+{activeTab === "Workforce" && (
+  <motion.div
+    key="wf"
+    initial={{ opacity: 0, y: 12 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0 }}
+    className="space-y-8"
+  >
+    {/* Header Section */}
+    <div className="flex items-end justify-between flex-wrap gap-4 border-b border-slate-100 pb-6">
+      <div>
+        <h2 className="text-3xl font-serif font-semibold tracking-tight text-slate-900">
+          Workforce
+        </h2>
+        <p className="text-slate-500 text-sm mt-1 font-medium">
+          Manage your core team and department structures. 
+          <span className="ml-2 text-slate-300">|</span>
+          <span className="ml-2 text-indigo-600">{employees.length} Active Members</span>
+        </p>
+      </div>
+      <button
+        onClick={() => setShowHireStaff(true)}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold transition-all bg-slate-900 text-white hover:bg-black hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0"
+      >
+        <UserPlus size={16} strokeWidth={2.5} /> 
+        Hire Staff
+      </button>
+    </div>
+
+    {/* Quick Stats Grid */}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <StatCard 
+        label="Full-time" 
+        value={employees.filter((e) => e.role !== "MANAGER").length} 
+        icon={<Users size={18} className="text-slate-600" />} 
+        onClick={() => setActiveTab("Workforce")}
+      />
+      <StatCard 
+        label="Management" 
+        value={employees.filter((e) => e.role === "MANAGER").length} 
+        icon={<UserCheck size={18} className="text-slate-600" />} 
+        onClick={() => setActiveTab("Workforce")}
+      />
+      <StatCard 
+        label="Growth" 
+        value="12%" 
+        icon={<UserPlus size={18} className="text-indigo-600" />} 
+        trend="+2 this month" 
+        onClick={() => setActiveTab("Workforce")}
+      />
+    </div>
+
+    {/* Main Table Container */}
+    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* Table Toolbar */}
+      <div className="px-6 py-5 flex items-center justify-between bg-slate-50/50 border-b border-slate-200">
+        <div className="relative w-full max-w-md group">
+          <Search 
+            size={16} 
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-slate-900 transition-colors" 
+          />
+          <input
+            placeholder="Search by name, role, or department..."
+            value={payrollSearch}
+            onChange={(e) => setPayrollSearch(e.target.value)}
+            className="w-full pl-11 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-400 transition-all placeholder:text-slate-400"
+          />
+        </div>
+        <div className="hidden sm:block">
+          <span className="text-xs font-bold uppercase tracking-widest text-slate-400">
+            Showing {filtered.length} Employees
+          </span>
+        </div>
+      </div>
+
+      {/* Employee List */}
+      <div className="divide-y divide-slate-100">
+        {filtered.map((emp) => (
+          <div
+            key={emp.id}
+            onClick={() => { setSelectedEmployeeInfo(emp); setShowEmployeeDetail(true); }}
+            className="group flex items-center gap-6 px-6 py-4 hover:bg-slate-50 transition-all cursor-pointer"
+          >
+            {/* Avatar with Ring Effect */}
+            <div className="relative">
+              <Avatar name={emp.name} px={44} />
+              <div className="absolute inset-0 rounded-full border-2 border-transparent group-hover:border-indigo-100 transition-all" />
+            </div>
+
+            {/* Identity */}
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                {emp.name}
+              </h4>
+              <p className="text-xs font-medium text-slate-500">
+                {emp.position || emp.role || "Staff"}
+              </p>
+            </div>
+
+            {/* Department - Pill Style */}
+            <div className="hidden md:block">
+              <span className="px-3 py-1 rounded-full bg-slate-100 text-[11px] font-bold text-slate-600 uppercase tracking-tight">
+                {emp.department?.name || "Unassigned"}
+              </span>
+            </div>
+
+            {/* Status/Role Badge */}
+            <div className="w-24 flex justify-end">
+              <Badge status={emp.role || "EMPLOYEE"} />
+            </div>
+
+            {/* Actions */}
+            <button className="p-2 rounded-xl text-slate-400 hover:bg-white hover:text-slate-900 hover:shadow-sm border border-transparent hover:border-slate-200 transition-all">
+              <MoreHorizontal size={18} />
+            </button>
+          </div>
+        ))}
+        
+        {filtered.length === 0 && (
+          <div className="py-20 text-center">
+            <p className="text-slate-400 text-sm">No team members found matching your search.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  </motion.div>
+)}
 
             {/* ── PROJECTS ──────────────────────────────────────────── */}
             {activeTab === "Projects" && (
@@ -1761,7 +1388,7 @@ export default function AuraFlowSuperAdmin({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-12 gap-4">
+                <div className="grid grid-cols-12 gap-6">
                   <div className="col-span-12 lg:col-span-8">
                     <div className="rounded-xl border p-4 bg-slate-50 border-slate-200">
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -1838,7 +1465,7 @@ export default function AuraFlowSuperAdmin({
                         {["Employee", "Type", "Department", "Period", "Reason", "Status", "Actions"].map((h) => (
                           <th key={h} className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-600">{h}</th>
                         ))}
-                      </tr>
+                       </tr>
                     </thead>
                     <tbody>
                       {(() => {

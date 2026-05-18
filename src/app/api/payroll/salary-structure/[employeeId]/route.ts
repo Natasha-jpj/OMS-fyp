@@ -103,6 +103,20 @@ export async function POST(request: NextRequest, context: any) {
       },
     });
 
+    // Keep employee record in sync: set employee.salary to latest basic salary
+    try {
+      await prisma.employee.update({
+        where: { id: employeeId },
+        data: {
+          salary: basicSalary,
+        },
+      });
+      console.log(`✅ Updated employee ${employeeId} salary to ${basicSalary}`);
+    } catch (err: any) {
+      // Non-fatal: log and continue. Employee may not exist in current tenants during import.
+      console.error(`❌ Failed to update employee ${employeeId} salary:`, err.message);
+    }
+
     return NextResponse.json(
       {
         success: true,

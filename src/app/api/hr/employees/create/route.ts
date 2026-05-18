@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { sendNewUserCredentials } from "@/lib/mail";
 
 export async function POST(req: Request) {
   try {
@@ -52,6 +53,20 @@ export async function POST(req: Request) {
         role: role || "EMPLOYEE",
       }
     });
+    // Send credentials email (best-effort). Use dynamic import to avoid ESM interop issues.
+    let emailSent = false;
+    try {
+      const mailModule = await import("@/lib/mail");
+      const fn = (mailModule as any).sendNewUserCredentials;
+      if (typeof fn === "function") {
+        await fn(newEmployee.name, newEmployee.email, newEmployee.email, password);
+        emailSent = true;
+      } else {
+        console.warn("sendNewUserCredentials not available on mail module");
+      }
+    } catch (e) {
+      console.warn("Failed to send credentials email:", (e as any)?.message || e);
+    }
     // Attempt to create a default salary structure so new employees are payroll-ready.
     try {
       const hrRecord = await prisma.hR.findUnique({ where: { id: hrId } });
@@ -69,6 +84,11 @@ export async function POST(req: Request) {
     } catch (e) {
       // Non-fatal: log and continue. Employee was created successfully.
       console.warn("Failed to auto-create salary structure:", e?.message || e);
+    }
+
+    // In development, include the plain password in the response to aid testing when email isn't configured.
+    if (process.env.NODE_ENV !== "production" && !emailSent) {
+      return NextResponse.json({ newEmployee, tempPassword: password });
     }
 
     return NextResponse.json(newEmployee);

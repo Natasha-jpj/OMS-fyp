@@ -4,70 +4,41 @@
 // FILE: src/components/payroll/PayrollDashboard.tsx
 // ============================================================
 //
-// Full-featured Payroll Dashboard with:
-//   - Overview tab: payroll run cards with process/finalize actions
-//   - Records tab: detailed per-employee salary table for a run
-//   - Setup tab: assign salary structures to employees
-//   - Settings tab: configure SSF rates, tax slabs
+// Simplified Payroll Dashboard:
+//   - Employees tab: list all employees, search, view details + payroll history
+//   - Salary Setup tab: assign salary structures to employees
+//   - Configuration tab: set SSF rates and minimum wage
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  DollarSign,
-  TrendingUp,
-  CheckCircle,
-  AlertCircle,
-  Clock,
-  RefreshCw,
-  Download,
-  Lock,
   Users,
   Settings,
-  ChevronDown,
-  ChevronUp,
-  Plus,
-  Eye,
   Search,
+  RefreshCw,
+  FileText,
+  TrendingUp,
+  DollarSign,
 } from "lucide-react";
+import PayrollEmployeeModal from "./PayrollEmployeeModal";
 
 // ─── Types ───────────────────────────────────────────────────
 
-interface PayrollRun {
+interface Employee {
   id: string;
-  organizationId: string;
-  month: number;
-  year: number;
-  status: "DRAFT" | "CALCULATED" | "FINALIZED" | "PAID" | "CANCELLED";
-  locked: boolean;
-  totalGrossSalary: number;
-  totalNetSalary: number;
-  totalSSFEmployee: number;
-  totalSSFEmployer: number;
-  totalTax: number;
-  notes?: string;
-  processedAt?: string;
-  finalizedAt?: string;
-  finalizedBy?: string;
-  createdAt: string;
-}
-
-interface PayrollRecord {
-  id: string;
-  employeeId: string;
-  employeeName: string;
-  position: string;
-  department: string;
-  basicSalary: number;
-  allowances: Record<string, number>;
-  grossSalary: number;
-  ssfEmployee: number;
-  ssfEmployer: number;
-  incomeTax: number;
-  leaveDeduction: number;
-  manualDeductions: number;
-  totalDeductions: number;
-  netSalary: number;
-  status: string;
-  notes?: string;
+  name: string;
+  email?: string;
+  role?: string;
+  position?: string;
+  salary?: number;
+  phone?: string;
+  department?: { id: string; name: string };
+  lastAudit?: string;
+  joinDate?: string | Date;
+  contractEndDate?: string | Date;
+  contractType?: string;
+  employmentStatus?: string;
+  contractUrl?: string;
+  managerId?: string;
 }
 
 // ─── Currency Formatter ───────────────────────────────────────
@@ -86,626 +57,275 @@ interface PayrollDashboardProps {
 
 // ─── Main Component ──────────────────────────────────────────
 export default function PayrollDashboard({ organizationId }: PayrollDashboardProps) {
-  const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "records" | "setup" | "settings">("overview");
-  const [selectedRun, setSelectedRun] = useState<PayrollRun | null>(null);
-  const [records, setRecords] = useState<PayrollRecord[]>([]);
-  const [recordsLoading, setRecordsLoading] = useState(false);
-  const [processing, setProcessing] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"employees" | "setup" | "settings">("employees");
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
 
-  // ── Fetch Payroll Runs ──────────────────────────────────────
-  const fetchPayrollRuns = useCallback(async () => {
+  // ── Fetch Employees ─────────────────────────────────────────
+  const fetchEmployees = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await fetch(`/api/payroll/runs?organizationId=${organizationId}`);
+      const res = await fetch("/api/hr/employees", { credentials: "include" });
       const data = await res.json();
-      setPayrollRuns(data.data || []);
+      setEmployees(data.employees || data.data || []);
     } catch (e) {
-      console.error("Failed to fetch payroll runs:", e);
+      console.error("Failed to fetch employees:", e);
     } finally {
       setLoading(false);
     }
-  }, [organizationId]);
+  };
 
   useEffect(() => {
-    fetchPayrollRuns();
-  }, [fetchPayrollRuns]);
+    fetchEmployees();
+  }, [organizationId]);
 
-  // ── Fetch Records for a Run ─────────────────────────────────
-  const fetchRecords = async (runId: string) => {
-    setRecordsLoading(true);
-    try {
-      const res = await fetch(
-        `/api/payroll/runs/${runId}/records?organizationId=${organizationId}`
-      );
-      const data = await res.json();
-      setRecords(data.data || []);
-    } catch (e) {
-      console.error("Failed to fetch records:", e);
-    } finally {
-      setRecordsLoading(false);
-    }
-  };
+  // ── Filtered Employees ──────────────────────────────────────
+  const filteredEmployees = employees.filter((emp) => {
+    const haystack = [emp.name, emp.position, emp.department?.name, emp.email]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(searchQuery.trim().toLowerCase());
+  });
 
-  // ── View Details (switch to records tab) ───────────────────
-  const handleViewDetails = (run: PayrollRun) => {
-    setSelectedRun(run);
-    setActiveTab("records");
-    fetchRecords(run.id);
-  };
-
-  // ── Process Payroll ─────────────────────────────────────────
-  const handleProcess = async (runId: string) => {
-    if (!confirm("Process payroll for all employees? This will calculate salaries.")) return;
-    setProcessing(runId);
-    try {
-      const res = await fetch(`/api/payroll/runs/${runId}/process`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationId }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        fetchPayrollRuns();
-        alert(
-          `✅ Payroll processed!\n${data.data.processed} employees calculated.\n${data.data.skipped > 0 ? `⚠️ ${data.data.skipped} skipped (no salary structure):\n${data.data.skippedEmployees?.join("\n")}` : ""}`
-        );
-      } else {
-        alert(`❌ Error: ${data.error}`);
-      }
-    } catch (e) {
-      alert("Failed to process payroll. Check console.");
-      console.error(e);
-    } finally {
-      setProcessing(null);
-    }
-  };
-
-  // ── Finalize Payroll ────────────────────────────────────────
-  const handleFinalize = async (runId: string) => {
-    if (
-      !confirm(
-        "Finalize and LOCK this payroll run?\n\nThis action cannot be undone. All records will be marked as verified."
-      )
-    )
-      return;
-
-    try {
-      const res = await fetch(`/api/payroll/runs/${runId}/finalize`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ approverNotes: "Approved by HR" }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        fetchPayrollRuns();
-        alert("✅ Payroll finalized and locked!");
-      } else {
-        alert(`❌ Error: ${data.error}`);
-      }
-    } catch (e) {
-      alert("Failed to finalize payroll.");
-      console.error(e);
-    }
-  };
-
-  // ── Create New Payroll Run ──────────────────────────────────
-  const handleCreateRun = async () => {
-    const now = new Date();
-    const month = parseInt(prompt("Enter month (1-12):", String(now.getMonth() + 1)) || "0");
-    const year = parseInt(prompt("Enter year:", String(now.getFullYear())) || "0");
-
-    if (!month || !year || month < 1 || month > 12) {
-      alert("Invalid month or year.");
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/payroll/runs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationId, month, year }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        fetchPayrollRuns();
-        alert("✅ New payroll run created!");
-      } else {
-        alert(`❌ Error: ${data.error}`);
-      }
-    } catch (e) {
-      alert("Failed to create payroll run.");
-    }
-  };
-
-  // ── Summary Stats ───────────────────────────────────────────
-  const totalGross = payrollRuns.reduce((s, r) => s + (Number(r.totalGrossSalary) || 0), 0);
-  const totalNet = payrollRuns.reduce((s, r) => s + (Number(r.totalNetSalary) || 0), 0);
-  const pendingRuns = payrollRuns.filter((r) => r.status === "DRAFT").length;
-  const finalizedRuns = payrollRuns.filter((r) => r.status === "FINALIZED" || r.status === "PAID").length;
+  // Statistics
+  const totalEmployees = employees.length;
+  const employeesWithSalary = employees.filter((e) => (e.salary ?? 0) > 0).length;
+  const missingSalaryCount = totalEmployees - employeesWithSalary;
 
   const tabs = [
-    { id: "overview", label: "Overview", icon: TrendingUp },
-    { id: "records", label: "Payroll Records", icon: Users },
-    { id: "setup", label: "Salary Setup", icon: Settings },
+    { id: "employees", label: "Employees", icon: Users },
+    { id: "setup", label: "Salary Setup", icon: TrendingUp },
     { id: "settings", label: "Configuration", icon: Settings },
   ] as const;
 
   return (
-    <div className="bg-gray-50 min-h-screen p-6">
-      {/* ── Header ── */}
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-            <DollarSign className="text-blue-600" size={32} />
-            Payroll Management
-          </h1>
-          <p className="text-gray-500 mt-1">Nepal Payroll System · SSF + Income Tax Compliant</p>
-        </div>
-        <div className="flex gap-2">
+    <div className="space-y-6">
+      {/* ── Modern Header ── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white shadow-xl">
+        <div className="absolute right-0 top-0 -mr-16 -mt-16 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+              Payroll Management
+            </h1>
+            <p className="mt-1 text-sm text-slate-300">
+              Nepal Payroll System · SSF + Income Tax Compliant
+            </p>
+          </div>
           <button
-            onClick={fetchPayrollRuns}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+            onClick={fetchEmployees}
+            className="flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/20"
           >
             <RefreshCw size={16} /> Refresh
           </button>
-          <button
-            onClick={handleCreateRun}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <Plus size={16} /> New Payroll Run
-          </button>
         </div>
       </div>
 
-      {/* ── Summary Stats ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        {[
-          { icon: TrendingUp, color: "blue", label: "Total Gross", value: fmt(totalGross) },
-          { icon: DollarSign, color: "green", label: "Total Net", value: fmt(totalNet) },
-          { icon: CheckCircle, color: "indigo", label: "Finalized", value: String(finalizedRuns) },
-          { icon: Clock, color: "orange", label: "Pending", value: String(pendingRuns) },
-        ].map(({ icon: Icon, color, label, value }) => (
-          <div key={label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-              </div>
-              <div className={`p-3 rounded-lg bg-${color}-50`}>
-                <Icon className={`text-${color}-600`} size={22} />
-              </div>
+          {/* ── Summary Cards (Employees overview) ── */}
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase text-slate-500">Total Employees</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{totalEmployees}</p>
+            </div>
+            <div className="rounded-xl bg-blue-50 p-2 text-blue-600">
+              <Users size={20} />
             </div>
           </div>
-        ))}
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase text-slate-500">Salary Ready</p>
+              <p className="mt-1 text-2xl font-bold text-emerald-600">{employeesWithSalary}</p>
+            </div>
+            <div className="rounded-xl bg-emerald-50 p-2 text-emerald-600">
+              <DollarSign size={20} />
+            </div>
+          </div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase text-slate-500">Missing Salary</p>
+              <p className="mt-1 text-2xl font-bold text-amber-600">{missingSalaryCount}</p>
+            </div>
+            <div className="rounded-xl bg-amber-50 p-2 text-amber-600">
+              <FileText size={20} />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── Tabs ── */}
-      <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex gap-1 bg-white rounded-xl border border-gray-200 p-1 w-fit flex-wrap">
-          {tabs.map(({ id, label }) => (
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-2">
+        <div className="flex gap-1">
+          {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
                 activeTab === id
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                  ? "bg-slate-900 text-white shadow-md"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               }`}
             >
+              <Icon size={15} />
               {label}
             </button>
           ))}
         </div>
-
-        <div className="relative w-full lg:w-[320px]">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search employees..."
-            className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-blue-500"
-          />
-        </div>
+        {activeTab === "employees" && (
+          <div className="relative w-full sm:w-64">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search employees..."
+              className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-9 pr-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-900"
+            />
+          </div>
+        )}
       </div>
 
       {/* ── Tab Content ── */}
-      {loading ? (
-        <LoadingState />
-      ) : activeTab === "overview" ? (
-        <OverviewTab
-          payrollRuns={payrollRuns}
-          processing={processing}
-          onProcess={handleProcess}
-          onFinalize={handleFinalize}
-          onViewDetails={handleViewDetails}
-          onCreate={handleCreateRun}
-        />
-      ) : activeTab === "records" ? (
-        <RecordsTab
-          payrollRuns={payrollRuns}
-          selectedRun={selectedRun}
-          records={records}
-          recordsLoading={recordsLoading}
-          onSelectRun={(run) => {
-            setSelectedRun(run);
-            fetchRecords(run.id);
+      {activeTab === "employees" && (
+        <EmployeesTab
+          employees={filteredEmployees}
+          loading={loading}
+          onViewEmployee={(emp) => {
+            console.log('PayrollDashboard: open employee', emp?.id);
+            setSelectedEmployee(emp);
+            setShowEmployeeModal(true);
           }}
         />
-      ) : activeTab === "setup" ? (
-        <SalarySetupTab organizationId={organizationId} searchQuery={searchQuery} />
-      ) : (
-        <ConfigurationTab organizationId={organizationId} />
       )}
+
+      {activeTab === "setup" && (
+        <SalarySetupTab
+          organizationId={organizationId}
+          searchQuery={searchQuery}
+          onRefreshEmployees={fetchEmployees}
+        />
+      )}
+      {activeTab === "settings" && <ConfigurationTab organizationId={organizationId} />}
+
+      {/* Payroll Employee Modal */}
+      <PayrollEmployeeModal
+        employee={selectedEmployee}
+        isOpen={showEmployeeModal}
+        onClose={() => {
+          setShowEmployeeModal(false);
+          setSelectedEmployee(null);
+        }}
+        organizationId={organizationId}
+        onRefreshEmployees={fetchEmployees}
+      />
     </div>
   );
 }
 
-// ─── Overview Tab ─────────────────────────────────────────────
+// ─── Employees Tab (clean table) ─────────────────────────────
 
-function OverviewTab({
-  payrollRuns,
-  processing,
-  onProcess,
-  onFinalize,
-  onViewDetails,
-  onCreate,
+function EmployeesTab({
+  employees,
+  loading,
+  onViewEmployee,
 }: {
-  payrollRuns: PayrollRun[];
-  processing: string | null;
-  onProcess: (id: string) => void;
-  onFinalize: (id: string) => void;
-  onViewDetails: (run: PayrollRun) => void;
-  onCreate: () => void;
+  employees: Employee[];
+  loading: boolean;
+  onViewEmployee: (emp: Employee) => void;
 }) {
-  if (payrollRuns.length === 0) {
+  if (loading) {
+    return <LoadingState />;
+  }
+
+  if (employees.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-16 text-center">
-        <AlertCircle className="mx-auto text-gray-300 mb-4" size={56} />
-        <h3 className="text-lg font-bold text-gray-900 mb-2">No Payroll Runs</h3>
-        <p className="text-gray-500 mb-6">Create your first payroll run to get started.</p>
-        <button
-          onClick={onCreate}
-          className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700"
-        >
-          Create Payroll Run
-        </button>
+      <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-12 text-center">
+        <Users size={48} className="text-slate-300" />
+        <h3 className="mt-4 text-lg font-semibold text-slate-900">No employees found</h3>
+        <p className="text-sm text-slate-500">Try adjusting your search or refresh the list.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {payrollRuns.map((run) => (
-        <PayrollRunCard
-          key={run.id}
-          run={run}
-          isProcessing={processing === run.id}
-          onProcess={onProcess}
-          onFinalize={onFinalize}
-          onViewDetails={onViewDetails}
-        />
-      ))}
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+            <tr>
+              <th className="px-5 py-3">Employee</th>
+              <th className="px-5 py-3">Department</th>
+              <th className="px-5 py-3">Position</th>
+              <th className="px-5 py-3">Salary (Monthly)</th>
+              <th className="px-5 py-3">Status</th>
+              <th className="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {employees.map((emp) => (
+              <tr
+                key={emp.id}
+                className="border-b border-slate-100 transition-colors hover:bg-slate-50 cursor-pointer"
+                onClick={() => onViewEmployee(emp)}
+              >
+                <td className="px-5 py-3">
+                  <div className="font-medium text-slate-900">{emp.name}</div>
+                  <div className="text-xs text-slate-500">{emp.email || ""}</div>
+                </td>
+                <td className="px-5 py-3 text-slate-600">{emp.department?.name || "—"}</td>
+                <td className="px-5 py-3 text-slate-600">{emp.position || emp.role || "—"}</td>
+                <td className="px-5 py-3 font-medium text-slate-900">{emp.salary ? fmt(emp.salary) : "—"}</td>
+                <td className="px-5 py-3">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      emp.employmentStatus === "Active"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-amber-50 text-amber-700"
+                    }`}
+                  >
+                    {emp.employmentStatus || "Active"}
+                  </span>
+                </td>
+                <td className="px-5 py-3 text-right">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onViewEmployee(emp);
+                    }}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+                  >
+                    View Details
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-// ─── Payroll Run Card ─────────────────────────────────────────
+// ─── Salary Setup Tab (unchanged, from original) ─────────────
 
-function PayrollRunCard({
-  run,
-  isProcessing,
-  onProcess,
-  onFinalize,
-  onViewDetails,
+function SalarySetupTab({
+  organizationId,
+  searchQuery,
+  onRefreshEmployees,
 }: {
-  run: PayrollRun;
-  isProcessing: boolean;
-  onProcess: (id: string) => void;
-  onFinalize: (id: string) => void;
-  onViewDetails: (run: PayrollRun) => void;
+  organizationId: string;
+  searchQuery: string;
+  onRefreshEmployees?: () => void;
 }) {
-  const statusColors: Record<string, string> = {
-    DRAFT: "bg-yellow-100 text-yellow-800 border-yellow-200",
-    CALCULATED: "bg-purple-100 text-purple-800 border-purple-200",
-    FINALIZED: "bg-blue-100 text-blue-800 border-blue-200",
-    PAID: "bg-green-100 text-green-800 border-green-200",
-    CANCELLED: "bg-red-100 text-red-800 border-red-200",
-  };
-
-  const monthName = new Date(0, run.month - 1).toLocaleDateString("en-US", { month: "long" });
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-xl font-bold text-gray-900">
-            {monthName} {run.year}
-          </h3>
-          <div className="flex gap-2 mt-2">
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-bold border ${statusColors[run.status] || "bg-gray-100 text-gray-800"}`}
-            >
-              {run.status}
-            </span>
-            {run.locked && (
-              <span className="flex items-center gap-1 text-xs text-gray-600 bg-gray-100 border border-gray-200 px-3 py-1 rounded-full">
-                <Lock size={11} /> Locked
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="text-right text-sm text-gray-500">
-          <p>Created {new Date(run.createdAt).toLocaleDateString()}</p>
-          {run.processedAt && <p>Processed {new Date(run.processedAt).toLocaleDateString()}</p>}
-        </div>
-      </div>
-
-      {/* Financial Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5 p-4 bg-gray-50 rounded-lg">
-        {[
-          { label: "Gross Salary", value: run.totalGrossSalary },
-          { label: "SSF Employee", value: run.totalSSFEmployee },
-          { label: "SSF Employer", value: run.totalSSFEmployer },
-          { label: "Income Tax", value: run.totalTax },
-          { label: "Net Salary", value: run.totalNetSalary, highlight: true },
-        ].map(({ label, value, highlight }) => (
-          <div key={label}>
-            <p className="text-xs text-gray-500 font-medium">{label}</p>
-            <p className={`font-bold text-sm mt-1 ${highlight ? "text-green-600 text-base" : "text-gray-900"}`}>
-              NPR {Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 0 })}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex gap-2">
-        {run.status === "DRAFT" && (
-          <button
-            onClick={() => onProcess(run.id)}
-            disabled={isProcessing}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-60 flex items-center justify-center gap-2"
-          >
-            {isProcessing ? (
-              <><RefreshCw size={16} className="animate-spin" /> Processing...</>
-            ) : (
-              <><RefreshCw size={16} /> Process Payroll</>
-            )}
-          </button>
-        )}
-        {run.status === "CALCULATED" && (
-          <>
-            <button
-              onClick={() => onViewDetails(run)}
-              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 flex items-center gap-2"
-            >
-              <Eye size={16} /> Review
-            </button>
-            <button
-              onClick={() => onFinalize(run.id)}
-              className="flex-1 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
-            >
-              <CheckCircle size={16} /> Finalize & Lock
-            </button>
-          </>
-        )}
-        {(run.status === "FINALIZED" || run.status === "PAID") && (
-          <button
-            onClick={() => onViewDetails(run)}
-            className="flex-1 px-4 py-2 bg-gray-700 text-white text-sm font-medium rounded-lg hover:bg-gray-800 flex items-center justify-center gap-2"
-          >
-            <Eye size={16} /> View Payslips
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Records Tab ──────────────────────────────────────────────
-
-function RecordsTab({
-  payrollRuns,
-  selectedRun,
-  records,
-  recordsLoading,
-  onSelectRun,
-}: {
-  payrollRuns: PayrollRun[];
-  selectedRun: PayrollRun | null;
-  records: PayrollRecord[];
-  recordsLoading: boolean;
-  onSelectRun: (run: PayrollRun) => void;
-}) {
-  const [expandedRecord, setExpandedRecord] = useState<string | null>(null);
-
-  return (
-    <div className="space-y-4">
-      {/* Run Selector */}
-      <div className="bg-white rounded-xl border border-gray-100 p-4">
-        <label className="block text-sm font-semibold text-gray-700 mb-2">Select Payroll Run:</label>
-        <div className="flex flex-wrap gap-2">
-          {payrollRuns.map((run) => (
-            <button
-              key={run.id}
-              onClick={() => onSelectRun(run)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                selectedRun?.id === run.id
-                  ? "bg-blue-600 text-white border-blue-600"
-                  : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"
-              }`}
-            >
-              {new Date(0, run.month - 1).toLocaleDateString("en-US", { month: "short" })} {run.year}{" "}
-              <span className="text-xs opacity-70">({run.status})</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Records Table */}
-      {recordsLoading ? (
-        <LoadingState />
-      ) : !selectedRun ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-12 text-center text-gray-400">
-          Select a payroll run above to view records
-        </div>
-      ) : records.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
-          <AlertCircle className="mx-auto text-gray-300 mb-3" size={40} />
-          <p className="text-gray-600 font-medium">No records found.</p>
-          <p className="text-gray-400 text-sm mt-1">
-            Process the payroll run first to generate employee records.
-          </p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="font-bold text-gray-900">
-              {new Date(0, selectedRun.month - 1).toLocaleDateString("en-US", { month: "long" })}{" "}
-              {selectedRun.year} — {records.length} Employees
-            </h3>
-            <span className="text-xs bg-gray-100 px-3 py-1 rounded-full text-gray-600">
-              Click any row to expand
-            </span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  {["Employee", "Department", "Gross", "SSF (EE)", "Tax", "Deductions", "Net Pay", "Status"].map((h) => (
-                    <th key={h} className="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wide">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {records.map((rec) => (
-                  <React.Fragment key={rec.id}>
-                    <tr
-                      className="border-b border-gray-100 hover:bg-blue-50 cursor-pointer"
-                      onClick={() =>
-                        setExpandedRecord(expandedRecord === rec.id ? null : rec.id)
-                      }
-                    >
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-gray-900">{rec.employeeName}</div>
-                        <div className="text-xs text-gray-400">{rec.position}</div>
-                      </td>
-                      <td className="py-3 px-4 text-gray-600">{rec.department}</td>
-                      <td className="py-3 px-4 font-medium">NPR {Number(rec.grossSalary).toLocaleString("en-IN")}</td>
-                      <td className="py-3 px-4 text-red-600">NPR {Number(rec.ssfEmployee).toLocaleString("en-IN")}</td>
-                      <td className="py-3 px-4 text-red-600">NPR {Number(rec.incomeTax).toLocaleString("en-IN")}</td>
-                      <td className="py-3 px-4 text-red-600">NPR {Number(rec.totalDeductions).toLocaleString("en-IN")}</td>
-                      <td className="py-3 px-4 font-bold text-green-700">
-                        NPR {Number(rec.netSalary).toLocaleString("en-IN")}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="px-2 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-800">
-                          {rec.status}
-                        </span>
-                      </td>
-                    </tr>
-                    {expandedRecord === rec.id && (
-                      <tr className="bg-blue-50 border-b border-blue-100">
-                        <td colSpan={8} className="px-6 py-4">
-                          <EmployeeRecordDetail record={rec} />
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Employee Record Detail (Expandable) ──────────────────────
-
-function EmployeeRecordDetail({ record }: { record: PayrollRecord }) {
-  return (
-    <div className="grid grid-cols-3 gap-6">
-      <div>
-        <h4 className="text-xs font-bold text-blue-700 uppercase mb-3">Earnings</h4>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-gray-600">Basic Salary</span>
-            <span className="font-medium">NPR {Number(record.basicSalary).toLocaleString("en-IN")}</span>
-          </div>
-          {record.allowances && Object.entries(record.allowances).map(([k, v]) => (
-            <div key={k} className="flex justify-between">
-              <span className="text-gray-600">{k.charAt(0).toUpperCase() + k.slice(1)}</span>
-              <span className="font-medium">NPR {Number(v).toLocaleString("en-IN")}</span>
-            </div>
-          ))}
-          <div className="flex justify-between border-t pt-2 font-bold">
-            <span>Gross Salary</span>
-            <span>NPR {Number(record.grossSalary).toLocaleString("en-IN")}</span>
-          </div>
-        </div>
-      </div>
-      <div>
-        <h4 className="text-xs font-bold text-red-600 uppercase mb-3">Deductions</h4>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-gray-600">SSF (Employee 11%)</span>
-            <span className="font-medium text-red-600">- NPR {Number(record.ssfEmployee).toLocaleString("en-IN")}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Income Tax</span>
-            <span className="font-medium text-red-600">- NPR {Number(record.incomeTax).toLocaleString("en-IN")}</span>
-          </div>
-          {Number(record.leaveDeduction) > 0 && (
-            <div className="flex justify-between">
-              <span className="text-gray-600">Leave Deduction</span>
-              <span className="font-medium text-red-600">- NPR {Number(record.leaveDeduction).toLocaleString("en-IN")}</span>
-            </div>
-          )}
-          {Number(record.manualDeductions) > 0 && (
-            <div className="flex justify-between">
-              <span className="text-gray-600">Other Deductions</span>
-              <span className="font-medium text-red-600">- NPR {Number(record.manualDeductions).toLocaleString("en-IN")}</span>
-            </div>
-          )}
-          <div className="flex justify-between border-t pt-2 font-bold text-red-600">
-            <span>Total Deductions</span>
-            <span>NPR {Number(record.totalDeductions).toLocaleString("en-IN")}</span>
-          </div>
-        </div>
-      </div>
-      <div>
-        <h4 className="text-xs font-bold text-green-700 uppercase mb-3">Summary</h4>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between font-bold text-green-700 text-lg">
-            <span>Net Pay</span>
-            <span>NPR {Number(record.netSalary).toLocaleString("en-IN")}</span>
-          </div>
-          <div className="flex justify-between text-gray-500">
-            <span>Employer SSF (20%)</span>
-            <span>NPR {Number(record.ssfEmployer).toLocaleString("en-IN")}</span>
-          </div>
-          {record.notes && (
-            <p className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded mt-2">
-              ⚠️ {record.notes}
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Salary Setup Tab ─────────────────────────────────────────
-
-function SalarySetupTab({ organizationId, searchQuery }: { organizationId: string; searchQuery: string }) {
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
@@ -721,28 +341,25 @@ function SalarySetupTab({ organizationId, searchQuery }: { organizationId: strin
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    const fetchEmployees = async () => {
+    // Local fetch for salary-setup employees (keeps tab independent)
+    const fetchSetupEmployees = async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/hr/employees", {
-          credentials: "include",
-        });
+        const res = await fetch("/api/hr/employees", { credentials: "include" });
         const data = await res.json();
         setEmployees(data.employees || data.data || []);
-      } catch (e) {
-        console.error(e);
+      } catch (err) {
+        console.error("Failed to fetch employees for Salary Setup:", err);
       } finally {
         setLoading(false);
       }
     };
-    fetchEmployees();
+
+    fetchSetupEmployees();
   }, [organizationId]);
 
   const filteredEmployees = employees.filter((emp) => {
-    const haystack = [emp.name, emp.position, emp.department?.name]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
+    const haystack = [emp.name, emp.position, emp.department?.name].filter(Boolean).join(" ").toLowerCase();
     return haystack.includes(searchQuery.trim().toLowerCase());
   });
 
@@ -773,7 +390,17 @@ function SalarySetupTab({ organizationId, searchQuery }: { organizationId: strin
       });
       const data = await res.json();
       setMessage(data.success ? "✅ Salary structure saved!" : `❌ ${data.error}`);
-    } catch (e) {
+      if (data.success) {
+        // Refresh employee list so UI reflects updated salary
+        try {
+          onRefreshEmployees && onRefreshEmployees();
+        } catch (err) {
+          // ignore
+        }
+        // Optionally clear selection or keep it selected
+      }
+    } catch (err) {
+      console.error(err);
       setMessage("❌ Failed to save.");
     } finally {
       setSaving(false);
@@ -781,29 +408,29 @@ function SalarySetupTab({ organizationId, searchQuery }: { organizationId: strin
   };
 
   return (
-    <div className="grid md:grid-cols-2 gap-6">
+    <div className="grid gap-6 md:grid-cols-2">
       {/* Employee List */}
-      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <h3 className="font-bold text-gray-900">Employees</h3>
-          <p className="text-xs text-gray-500 mt-1">Select an employee to set their salary structure</p>
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 bg-slate-50 px-5 py-3">
+          <h3 className="font-bold text-slate-900">Employees</h3>
+          <p className="text-xs text-slate-500">Select an employee to set salary structure</p>
         </div>
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Loading employees...</div>
+          <div className="p-8 text-center text-slate-400">Loading employees...</div>
         ) : filteredEmployees.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">No employees found.</div>
+          <div className="p-8 text-center text-slate-400">No employees found.</div>
         ) : (
-          <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+          <div className="max-h-96 divide-y divide-slate-100 overflow-y-auto">
             {filteredEmployees.map((emp) => (
               <button
                 key={emp.id}
                 onClick={() => setSelectedEmployee(emp)}
-                className={`w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors ${
-                  selectedEmployee?.id === emp.id ? "bg-blue-50 border-l-2 border-blue-600" : ""
+                className={`w-full px-5 py-3 text-left transition-colors hover:bg-slate-50 ${
+                  selectedEmployee?.id === emp.id ? "border-l-4 border-slate-900 bg-slate-50" : ""
                 }`}
               >
-                <div className="font-medium text-gray-900 text-sm">{emp.name}</div>
-                <div className="text-xs text-gray-500">
+                <div className="font-medium text-slate-900">{emp.name}</div>
+                <div className="text-xs text-slate-500">
                   {emp.position} · {emp.department?.name || "No dept"}
                 </div>
               </button>
@@ -813,19 +440,17 @@ function SalarySetupTab({ organizationId, searchQuery }: { organizationId: strin
       </div>
 
       {/* Salary Form */}
-      <div className="bg-white rounded-xl border border-gray-100 p-6">
-        <h3 className="font-bold text-gray-900 mb-1">
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="text-lg font-bold text-slate-900">
           {selectedEmployee ? `Salary for ${selectedEmployee.name}` : "Salary Structure"}
         </h3>
-        <p className="text-xs text-gray-500 mb-5">
-          {selectedEmployee
-            ? "Set the basic salary and allowances below."
-            : "Select an employee first."}
+        <p className="mb-5 text-xs text-slate-500">
+          {selectedEmployee ? "Set the basic salary and allowances below." : "Select an employee first."}
         </p>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
+            <label className="mb-1 block text-xs font-semibold text-slate-700">
               Basic Salary (NPR) <span className="text-red-500">*</span>
             </label>
             <input
@@ -834,9 +459,9 @@ function SalarySetupTab({ organizationId, searchQuery }: { organizationId: strin
               value={form.basicSalary}
               onChange={(e) => setForm({ ...form, basicSalary: e.target.value })}
               disabled={!selectedEmployee}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none disabled:bg-slate-50"
             />
-            <p className="text-xs text-gray-400 mt-1">SSF is calculated on basic salary (11% employee, 20% employer)</p>
+            <p className="mt-1 text-xs text-slate-400">SSF is calculated on basic salary (11% employee, 20% employer)</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -847,34 +472,34 @@ function SalarySetupTab({ organizationId, searchQuery }: { organizationId: strin
               { key: "medical", label: "Medical Allowance" },
             ].map(({ key, label }) => (
               <div key={key}>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">{label}</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">{label}</label>
                 <input
                   type="number"
                   placeholder="0"
                   value={form[key as keyof typeof form]}
                   onChange={(e) => setForm({ ...form, [key]: e.target.value })}
                   disabled={!selectedEmployee}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500 disabled:bg-gray-50"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none disabled:bg-slate-50"
                 />
               </div>
             ))}
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Effective From</label>
+            <label className="mb-1 block text-xs font-semibold text-slate-700">Effective From</label>
             <input
               type="date"
               value={form.effectiveFromDate}
               onChange={(e) => setForm({ ...form, effectiveFromDate: e.target.value })}
               disabled={!selectedEmployee}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500 disabled:bg-gray-50"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none disabled:bg-slate-50"
             />
           </div>
 
           {/* Preview */}
           {form.basicSalary && (
-            <div className="bg-gray-50 rounded-lg p-4 text-sm">
-              <p className="font-semibold text-gray-700 mb-2">Quick Preview</p>
+            <div className="rounded-lg bg-slate-50 p-4 text-sm">
+              <p className="mb-2 font-semibold text-slate-700">Quick Preview</p>
               {(() => {
                 const basic = parseFloat(form.basicSalary) || 0;
                 const allowanceTotal =
@@ -885,22 +510,20 @@ function SalarySetupTab({ organizationId, searchQuery }: { organizationId: strin
                 const ssfEE = basic * 0.11;
                 const ssfER = basic * 0.2;
                 return (
-                  <div className="space-y-1 text-gray-600">
+                  <div className="space-y-1 text-slate-600">
                     <div className="flex justify-between">
                       <span>Gross Salary</span>
-                      <span className="font-medium">NPR {gross.toLocaleString("en-IN")}</span>
+                      <span className="font-medium">{fmt(gross)}</span>
                     </div>
                     <div className="flex justify-between text-red-600">
                       <span>Employee SSF (11%)</span>
-                      <span>- NPR {ssfEE.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                      <span>- {fmt(ssfEE)}</span>
                     </div>
                     <div className="flex justify-between text-amber-700">
                       <span>Employer SSF (20%)</span>
-                      <span>NPR {ssfER.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                      <span>{fmt(ssfER)}</span>
                     </div>
-                    <div className="flex justify-between text-xs text-gray-400">
-                      <span>Tax calculated during payroll run</span>
-                    </div>
+                    <div className="text-xs text-slate-400">Tax calculated during payroll run</div>
                   </div>
                 );
               })()}
@@ -908,7 +531,7 @@ function SalarySetupTab({ organizationId, searchQuery }: { organizationId: strin
           )}
 
           {message && (
-            <p className={`text-sm font-medium ${message.startsWith("✅") ? "text-green-600" : "text-red-600"}`}>
+            <p className={`text-sm font-medium ${message.startsWith("✅") ? "text-emerald-600" : "text-red-600"}`}>
               {message}
             </p>
           )}
@@ -916,7 +539,7 @@ function SalarySetupTab({ organizationId, searchQuery }: { organizationId: strin
           <button
             onClick={handleSave}
             disabled={!selectedEmployee || saving}
-            className="w-full py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
+            className="w-full rounded-lg bg-slate-900 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
           >
             {saving ? "Saving..." : "Save Salary Structure"}
           </button>
@@ -926,7 +549,7 @@ function SalarySetupTab({ organizationId, searchQuery }: { organizationId: strin
   );
 }
 
-// ─── Configuration Tab ────────────────────────────────────────
+// ─── Configuration Tab (unchanged) ───────────────────────────
 
 function ConfigurationTab({ organizationId }: { organizationId: string }) {
   const [config, setConfig] = useState({ ssfEmployeeRate: 11, ssfEmployerRate: 20, minimumWage: 13500 });
@@ -936,7 +559,9 @@ function ConfigurationTab({ organizationId }: { organizationId: string }) {
   useEffect(() => {
     fetch(`/api/payroll/configuration?organizationId=${organizationId}`)
       .then((r) => r.json())
-      .then((d) => { if (d.success) setConfig(d.data); });
+      .then((d) => {
+        if (d.success) setConfig(d.data);
+      });
   }, [organizationId]);
 
   const handleSave = async () => {
@@ -956,58 +581,50 @@ function ConfigurationTab({ organizationId }: { organizationId: string }) {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <div className="bg-white rounded-xl border border-gray-100 p-6">
-        <h3 className="font-bold text-gray-900 mb-1">SSF Configuration</h3>
-        <p className="text-xs text-gray-500 mb-5">Social Security Fund rates (Nepal standard: 11% + 20%)</p>
-        <div className="grid grid-cols-2 gap-4">
-          {[
-            { key: "ssfEmployeeRate", label: "Employee SSF Rate (%)", hint: "Standard: 11%" },
-            { key: "ssfEmployerRate", label: "Employer SSF Rate (%)", hint: "Standard: 20%" },
-          ].map(({ key, label, hint }) => (
-            <div key={key}>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">{label}</label>
-              <input
-                type="number"
-                value={config[key as keyof typeof config]}
-                onChange={(e) => setConfig({ ...config, [key]: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-              />
-              <p className="text-xs text-gray-400 mt-1">{hint}</p>
-            </div>
-          ))}
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="text-lg font-bold text-slate-900">SSF Configuration</h3>
+        <p className="mb-5 text-xs text-slate-500">Social Security Fund rates (Nepal standard: 11% + 20%)</p>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-700">Employee SSF Rate (%)</label>
+            <input
+              type="number"
+              value={config.ssfEmployeeRate}
+              onChange={(e) => setConfig({ ...config, ssfEmployeeRate: parseFloat(e.target.value) })}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
+            />
+            <p className="mt-1 text-xs text-slate-400">Standard: 11%</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-700">Employer SSF Rate (%)</label>
+            <input
+              type="number"
+              value={config.ssfEmployerRate}
+              onChange={(e) => setConfig({ ...config, ssfEmployerRate: parseFloat(e.target.value) })}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
+            />
+            <p className="mt-1 text-xs text-slate-400">Standard: 20%</p>
+          </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 p-6">
-        <h3 className="font-bold text-gray-900 mb-1">Minimum Wage</h3>
-        <p className="text-xs text-gray-500 mb-4">Nepal minimum wage (NPR). Used for validation.</p>
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="text-lg font-bold text-slate-900">Minimum Wage</h3>
+        <p className="mb-4 text-xs text-slate-500">Nepal minimum wage (NPR). Used for validation.</p>
         <input
           type="number"
           value={config.minimumWage}
           onChange={(e) => setConfig({ ...config, minimumWage: parseFloat(e.target.value) })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
         />
       </div>
 
-      {/* <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-        <h4 className="font-bold text-amber-800 mb-2">⚡ Tax Slabs Setup</h4>
-        <p className="text-sm text-amber-700 mb-3">
-          To set up Nepal&apos;s tax slabs for the first time, call this API once:
-        </p>
-        <code className="block bg-amber-100 rounded p-3 text-xs text-amber-900 font-mono">
-          POST /api/payroll/seed?organizationId={organizationId}
-        </code>
-        <p className="text-xs text-amber-600 mt-2">
-          This seeds the standard Nepal FY 2080/81 tax slabs. You can edit them afterward via the tax-slabs API.
-        </p>
-      </div> */}
-
-      {msg && <p className={`text-sm font-medium ${msg.startsWith("✅") ? "text-green-600" : "text-red-600"}`}>{msg}</p>}
+      {msg && <p className={`text-sm font-medium ${msg.startsWith("✅") ? "text-emerald-600" : "text-red-600"}`}>{msg}</p>}
 
       <button
         onClick={handleSave}
         disabled={saving}
-        className="px-8 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        className="rounded-lg bg-slate-900 px-6 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
       >
         {saving ? "Saving..." : "Save Configuration"}
       </button>
@@ -1015,13 +632,13 @@ function ConfigurationTab({ organizationId }: { organizationId: string }) {
   );
 }
 
-// ─── Helpers ──────────────────────────────────────────────────
+// ─── Loading State ───────────────────────────────────────────
 
 function LoadingState() {
   return (
-    <div className="text-center py-16">
-      <RefreshCw className="mx-auto text-blue-500 animate-spin mb-4" size={32} />
-      <p className="text-gray-500">Loading payroll data...</p>
+    <div className="flex flex-col items-center justify-center py-16">
+      <RefreshCw className="mb-3 h-8 w-8 animate-spin text-slate-400" />
+      <p className="text-sm text-slate-500">Loading employees...</p>
     </div>
   );
 }

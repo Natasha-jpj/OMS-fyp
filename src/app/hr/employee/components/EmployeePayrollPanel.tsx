@@ -27,13 +27,14 @@ export default function EmployeePayrollPanel({
   useEffect(() => {
     if (!employeeId) return;
     let cancelled = false;
-    setLoading(true);
-    setError(null);
 
-    const q = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : "";
-    fetch(`/api/payroll/employee/${employeeId}/records${q}`)
-      .then((r) => r.json())
-      .then((data) => {
+    (async () => {
+      setLoading(true);
+      setError(null);
+      const q = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : "";
+      try {
+        const r = await fetch(`/api/payroll/employee/${employeeId}/records${q}`);
+        const data = await r.json();
         if (cancelled) return;
         if (!data || !data.success) {
           setError(data?.error || "Failed to load payroll records");
@@ -41,15 +42,14 @@ export default function EmployeePayrollPanel({
         } else {
           setRecords(data.data || []);
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         if (cancelled) return;
         console.error(err);
         setError("Failed to fetch payroll records");
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
