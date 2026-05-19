@@ -59,6 +59,9 @@ model Employee {
   contractEndDate   DateTime?          @db.Timestamp(6)
   employmentStatus  String?            @default("Active")
   contractUrl       String?
+  joinDate          DateTime?          @default(now()) @db.Timestamp(6)
+  address           String?            @db.VarChar(255)
+  emergencyContact  String?            @db.VarChar(255)
   attendances       Attendance[]
   contractDocuments ContractDocument[] @relation("UploadedContracts")
   uploadedContracts ContractDocument[] @relation("UploadedBy")
@@ -173,56 +176,50 @@ model ContractDocument {
   @@index([employeeId], map: "idx_contract_employee")
 }
 
-// ============================================
-// PAYROLL SYSTEM MODELS
-// ============================================
-
 model PayrollConfiguration {
-  id                  String   @id @default(cuid())
-  organizationId      String
-  ssfEmployeeRate     Float    @default(11) // 11%
-  ssfEmployerRate     Float    @default(20) // 20%
-  minimumWage         Decimal  @db.Decimal(15, 2) @default(13500)
-  currency            String   @default("NPR")
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  createdBy           String?
-  updatedBy           String?
-
-  @@unique([organizationId])
+  id              String   @id @default(cuid())
+  organizationId  String   @unique
+  ssfEmployeeRate Float    @default(11)
+  ssfEmployerRate Float    @default(20)
+  minimumWage     Decimal  @default(13500) @db.Decimal(15, 2)
+  currency        String   @default("NPR")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?
+  updatedBy       String?
 }
 
 model TaxSlab {
-  id                  String   @id @default(cuid())
-  organizationId      String
-  minIncome           Decimal  @db.Decimal(15, 2)
-  maxIncome           Decimal? @db.Decimal(15, 2)
-  taxRate             Float    // Percentage (0-100)
-  reliefAmount        Decimal  @db.Decimal(15, 2) @default(0)
-  effectiveFromDate   DateTime
-  effectiveToDate     DateTime?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  createdBy           String?
-  updatedBy           String?
+  id                String    @id @default(cuid())
+  organizationId    String
+  minIncome         Decimal   @db.Decimal(15, 2)
+  maxIncome         Decimal?  @db.Decimal(15, 2)
+  taxRate           Float
+  reliefAmount      Decimal   @default(0) @db.Decimal(15, 2)
+  effectiveFromDate DateTime
+  effectiveToDate   DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdBy         String?
+  updatedBy         String?
 
   @@index([organizationId])
   @@index([effectiveFromDate])
 }
 
 model SalaryStructure {
-  id                  String   @id @default(cuid())
-  organizationId      String
-  employeeId          String
-  basicSalary         Decimal  @db.Decimal(15, 2)
-  allowances          Json     // { "hra": 15000, "dearness": 10000, ... }
-  effectiveFromDate   DateTime
-  effectiveToDate     DateTime?
-  department          String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  createdBy           String?
-  updatedBy           String?
+  id                String    @id @default(cuid())
+  organizationId    String
+  employeeId        String
+  basicSalary       Decimal   @db.Decimal(15, 2)
+  allowances        Json
+  effectiveFromDate DateTime
+  effectiveToDate   DateTime?
+  department        String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdBy         String?
+  updatedBy         String?
 
   @@index([organizationId])
   @@index([employeeId])
@@ -230,27 +227,26 @@ model SalaryStructure {
 }
 
 model PayrollRun {
-  id                  String   @id @default(cuid())
-  organizationId      String
-  month               Int      // 1-12
-  year                Int
-  status              String   @default("DRAFT") // DRAFT, CALCULATED, FINALIZED, PAID, CANCELLED
-  locked              Boolean  @default(false)
-  totalGrossSalary    Decimal  @db.Decimal(15, 2) @default(0)
-  totalNetSalary      Decimal  @db.Decimal(15, 2) @default(0)
-  totalSSFEmployee    Decimal  @db.Decimal(15, 2) @default(0)
-  totalSSFEmployer    Decimal  @db.Decimal(15, 2) @default(0)
-  totalTax            Decimal  @db.Decimal(15, 2) @default(0)
-  notes               String?
-  processedAt         DateTime?
-  finalizedAt         DateTime?
-  finalizedBy         String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  createdBy           String?
-  updatedBy           String?
-
-  records             PayrollRecord[]
+  id               String          @id @default(cuid())
+  organizationId   String
+  month            Int
+  year             Int
+  status           String          @default("DRAFT")
+  locked           Boolean         @default(false)
+  totalGrossSalary Decimal         @default(0) @db.Decimal(15, 2)
+  totalNetSalary   Decimal         @default(0) @db.Decimal(15, 2)
+  totalSSFEmployee Decimal         @default(0) @db.Decimal(15, 2)
+  totalSSFEmployer Decimal         @default(0) @db.Decimal(15, 2)
+  totalTax         Decimal         @default(0) @db.Decimal(15, 2)
+  notes            String?
+  processedAt      DateTime?
+  finalizedAt      DateTime?
+  finalizedBy      String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  createdBy        String?
+  updatedBy        String?
+  records          PayrollRecord[]
 
   @@unique([organizationId, month, year])
   @@index([organizationId])
@@ -258,33 +254,32 @@ model PayrollRun {
 }
 
 model PayrollRecord {
-  id                  String   @id @default(cuid())
-  organizationId      String
-  payrollRunId        String
-  employeeId          String
-  employeeName        String
-  position            String?
-  department          String?
-  basicSalary         Decimal  @db.Decimal(15, 2)
-  allowances          Json     // Individual allowance breakdown
-  grossSalary         Decimal  @db.Decimal(15, 2)
-  ssfEmployee         Decimal  @db.Decimal(15, 2)
-  ssfEmployer         Decimal  @db.Decimal(15, 2)
-  taxableIncome       Decimal  @db.Decimal(15, 2)
-  incomeTax           Decimal  @db.Decimal(15, 2)
-  leaveDeduction      Decimal  @db.Decimal(15, 2) @default(0)
-  manualDeductions    Decimal  @db.Decimal(15, 2) @default(0)
-  totalDeductions     Decimal  @db.Decimal(15, 2)
-  netSalary           Decimal  @db.Decimal(15, 2)
-  status              String   @default("PENDING") // PENDING, CALCULATED, VERIFIED, PAID, CORRECTION
-  bankAccount         String?
-  notes               String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  createdBy           String?
-  updatedBy           String?
-
-  payrollRun          PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  id               String     @id @default(cuid())
+  organizationId   String
+  payrollRunId     String
+  employeeId       String
+  employeeName     String
+  position         String?
+  department       String?
+  basicSalary      Decimal    @db.Decimal(15, 2)
+  allowances       Json
+  grossSalary      Decimal    @db.Decimal(15, 2)
+  ssfEmployee      Decimal    @db.Decimal(15, 2)
+  ssfEmployer      Decimal    @db.Decimal(15, 2)
+  taxableIncome    Decimal    @db.Decimal(15, 2)
+  incomeTax        Decimal    @db.Decimal(15, 2)
+  leaveDeduction   Decimal    @default(0) @db.Decimal(15, 2)
+  manualDeductions Decimal    @default(0) @db.Decimal(15, 2)
+  totalDeductions  Decimal    @db.Decimal(15, 2)
+  netSalary        Decimal    @db.Decimal(15, 2)
+  status           String     @default("PENDING")
+  bankAccount      String?
+  notes            String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  createdBy        String?
+  updatedBy        String?
+  payrollRun       PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
 
   @@unique([payrollRunId, employeeId])
   @@index([organizationId])
@@ -294,20 +289,20 @@ model PayrollRecord {
 }
 
 model LeaveDeduction {
-  id                  String   @id @default(cuid())
-  organizationId      String
-  payrollRecordId     String
-  employeeId          String
-  leaveType           String   // Casual, Sick, Annual, Unpaid
-  days                Decimal  @db.Decimal(5, 2)
-  dailyRate           Decimal  @db.Decimal(15, 2)
-  deductionAmount     Decimal  @db.Decimal(15, 2)
-  approvalStatus      String   @default("PENDING") // PENDING, APPROVED, REJECTED
-  approvedBy          String?
-  approvalDate        DateTime?
-  reason              String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id              String    @id @default(cuid())
+  organizationId  String
+  payrollRecordId String
+  employeeId      String
+  leaveType       String
+  days            Decimal   @db.Decimal(5, 2)
+  dailyRate       Decimal   @db.Decimal(15, 2)
+  deductionAmount Decimal   @db.Decimal(15, 2)
+  approvalStatus  String    @default("PENDING")
+  approvedBy      String?
+  approvalDate    DateTime?
+  reason          String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([organizationId])
   @@index([payrollRecordId])
@@ -315,19 +310,19 @@ model LeaveDeduction {
 }
 
 model ManualDeduction {
-  id                  String   @id @default(cuid())
-  organizationId      String
-  payrollRecordId     String
-  employeeId          String
-  description         String   // Loan repayment, penalty, etc.
-  amount              Decimal  @db.Decimal(15, 2)
-  deductionType       String   // LOAN, PENALTY, INSURANCE, OTHER
-  approvalRequired    Boolean  @default(true)
-  approvalStatus      String   @default("PENDING") // PENDING, APPROVED, REJECTED
-  approvedBy          String?
-  approvalDate        DateTime?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id               String    @id @default(cuid())
+  organizationId   String
+  payrollRecordId  String
+  employeeId       String
+  description      String
+  amount           Decimal   @db.Decimal(15, 2)
+  deductionType    String
+  approvalRequired Boolean   @default(true)
+  approvalStatus   String    @default("PENDING")
+  approvedBy       String?
+  approvalDate     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([organizationId])
   @@index([payrollRecordId])
@@ -335,15 +330,15 @@ model ManualDeduction {
 }
 
 model PayrollAuditLog {
-  id                  String   @id @default(cuid())
-  organizationId      String
-  entityType          String   // PayrollRun, PayrollRecord, TaxSlab, etc.
-  entityId            String
-  action              String   // CREATE, UPDATE, DELETE, FINALIZE, APPROVE
-  changes             Json?    // { oldValues: {}, newValues: {} }
-  reason              String?
-  createdAt           DateTime @default(now())
-  createdBy           String?
+  id             String   @id @default(cuid())
+  organizationId String
+  entityType     String
+  entityId       String
+  action         String
+  changes        Json?
+  reason         String?
+  createdAt      DateTime @default(now())
+  createdBy      String?
 
   @@index([organizationId])
   @@index([entityType])
@@ -352,18 +347,18 @@ model PayrollAuditLog {
 }
 
 model PayslipTemplate {
-  id                  String   @id @default(cuid())
-  organizationId      String
-  name                String
-  templateHtml        String?  // HTML template for payslip
-  emailTemplate       String?  // Email body template
-  includeAllowances   Boolean  @default(true)
-  includeDeductions   Boolean  @default(true)
-  showBankDetails     Boolean  @default(true)
-  showSSF             Boolean  @default(true)
-  isDefault           Boolean  @default(false)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                String   @id @default(cuid())
+  organizationId    String
+  name              String
+  templateHtml      String?
+  emailTemplate     String?
+  includeAllowances Boolean  @default(true)
+  includeDeductions Boolean  @default(true)
+  showBankDetails   Boolean  @default(true)
+  showSSF           Boolean  @default(true)
+  isDefault         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@index([organizationId])
 }

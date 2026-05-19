@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRealTimeGlobal } from "../../hooks/useRealTime";
 import { X, Send, Search, ChevronLeft, Activity, ShieldCheck } from "lucide-react";
@@ -20,7 +20,6 @@ export function ChatWindow({ currentUser, userType, allEmployees = [], isOpen, o
   const [input, setInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [contacts, setContacts] = useState<any[]>(allEmployees);
-  const [pendingMessageIds, setPendingMessageIds] = useState<Set<string>>(new Set());
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -69,24 +68,29 @@ export function ChatWindow({ currentUser, userType, allEmployees = [], isOpen, o
     fetchMessages();
   }, [selectedUser, currentUser?.id]);
 
-  // Listen for real-time messages
-  useRealTimeGlobal((newMsg: any) => {
-    if (
-      selectedUser &&
-      currentUser?.id &&
-      !pendingMessageIds.has(newMsg.id) && // Skip if we already added this message optimistically
-      ((newMsg.senderId === currentUser.id && newMsg.receiverId === selectedUser.id) ||
-        (newMsg.senderId === selectedUser.id && newMsg.receiverId === currentUser.id))
-    ) {
-      setMessages((prev) => [...prev, newMsg]);
-      // Remove from pending after receiving from Pusher
-      setPendingMessageIds((prev) => {
-        const updated = new Set(prev);
-        updated.delete(newMsg.id);
-        return updated;
-      });
-    }
-  });
+  // Listen for real-time messages - memoized callback to avoid re-subscriptions
+  const memoizedMessageHandler = useCallback((newMsg: any) => {
+    setMessages((prevMessages) => {
+      // Check if message should be added
+      if (
+        selectedUser &&
+        currentUser &&
+        currentUser.id &&
+        !newMsg.id.toString().startsWith('pending-') &&
+        ((newMsg.senderId === currentUser.id && newMsg.receiverId === selectedUser.id) ||
+          (newMsg.senderId === selectedUser.id && newMsg.receiverId === currentUser.id))
+      ) {
+        // Check if message already exists to avoid duplicates
+        if (!prevMessages.find(m => m.id === newMsg.id)) {
+          return [...prevMessages, newMsg];
+        }
+      }
+      return prevMessages;
+    });
+  }, [selectedUser, currentUser]);
+
+  // Subscribe to real-time messages (called at top level, callback is memoized)
+  useRealTimeGlobal(memoizedMessageHandler);
 
   // Guard: Don't render if no current user
   if (!currentUser) return null;
@@ -113,7 +117,6 @@ export function ChatWindow({ currentUser, userType, allEmployees = [], isOpen, o
 
     // 1. Optimistic update - add to local state immediately
     setMessages((prev) => [...prev, newMsg]);
-    setPendingMessageIds((prev) => new Set([...prev, pendingId]));
     setInput("");
 
     // 2. Broadcast via Pusher to all users in real-time

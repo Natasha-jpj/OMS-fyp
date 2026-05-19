@@ -12,7 +12,7 @@ import {
   X, Calendar, CheckCircle, MinusCircle,
   ArrowDownCircle, LayoutDashboard, Settings,
   DollarSign, Send, MoreHorizontal, UserCheck,
-  Briefcase, PieChart,
+  Briefcase,
   UserPlus,
   Award, ListChecks, LogOut
 } from "lucide-react";
@@ -22,7 +22,7 @@ import { HireStaffModal } from "./HireStaffModal";
 import { TaskKanban } from "../../manager/dashboard/TaskKanban";
 import { ChatWindow } from "../../components/ChatWindow";
 import { ChatConnectButton } from "../../components/ChatConnectButton";
-import PayrollDashboard from "../payroll/components/PayrollDashboard";
+import PayrollDashboard from "../components/PayrollDashboard";
 import {
   AreaChart, Area, BarChart, Bar,
   Cell, RadialBarChart, RadialBar,
@@ -456,7 +456,8 @@ export default function AuraFlowSuperAdmin({
       if (sR.audits) setSalaryAudits(sR.audits);
       if (tR.tasks || Array.isArray(tR)) setTasks(Array.isArray(tR) ? tR : tR.tasks || []);
     } catch {}
-    }, [setSalaryAudits]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
   useEffect(() => { setEmployees(existingEmployees); }, [existingEmployees]);
 
@@ -487,7 +488,8 @@ export default function AuraFlowSuperAdmin({
       .then((r) => r.json())
       .then((d) => setBroadcasts(d.broadcasts || []));
     syncSystem();
-  }, [syncSystem]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const calcTotal = () => {
     const base = Number(baseline) || 0;
@@ -1721,10 +1723,10 @@ export default function AuraFlowSuperAdmin({
 
       {/* ── INTEGRATED TOOLS ────────────────────────────────────────────── */}
       <ChatWindow currentUser={currentUser} userType="HR" isOpen={chatOpen} onClose={() => setChatOpen(false)} />
-      <CreateDeptModal isOpen={showCreateDept} onClose={() => setShowCreateDept(false)} employees={employees}
+      <CreateDeptModal isOpen={showCreateDept} onClose={() => setShowCreateDept(false)} employees={employees as never}
         onSuccess={() => { syncSystem(); setShowCreateDept(false); }} />
       <HireStaffModal isOpen={showHireStaff} onClose={() => setShowHireStaff(false)}
-        onSuccess={() => { syncSystem(); setShowHireStaff(false); }} />
+        onSuccess={() => { syncSystem(); setShowHireStaff(false); }} departments={departments} />
       <EmployeeDetailModal employee={selectedEmployeeInfo} isOpen={showEmployeeDetail}
         onClose={() => { setShowEmployeeDetail(false); setSelectedEmployeeInfo(null); }} />
     </div>

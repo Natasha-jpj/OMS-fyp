@@ -13,5 +13,6 @@ export const useRealTimeGlobal = (onNewMessage: (msg: any) => void) => {
     return () => {
       pusherClient.unsubscribe("global-office");
     };
-  }, [onNewMessage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 };
